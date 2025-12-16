@@ -4,7 +4,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 const initialState: boolean = false
 
 const scannerMenuSlice = createSlice({
-  name: 'lesson',
+  name: 'scannerMenu',
   initialState,
   reducers: {
     setScannerMenu: (state: boolean, action: PayloadAction<boolean>):boolean => action.payload,

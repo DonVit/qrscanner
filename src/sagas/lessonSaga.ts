@@ -1,5 +1,5 @@
 import { takeEvery, put } from "redux-saga/effects";
-import { scnnerOff } from "../slices/scannerMenuSlice";
+// import { scnnerOff } from "../slices/scannerMenuSlice";
 import { addRecept } from "../slices/receptsSlice";
 
 function* handleAddRecept() {
@@ -7,5 +7,5 @@ function* handleAddRecept() {
 }
 
 export default function* receptsSaga() {
-  yield takeEvery(addRecept.type, handleAddRecept);
+  // yield takeEvery(addRecept.type, handleAddRecept);
 }

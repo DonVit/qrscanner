@@ -66,7 +66,7 @@ export default function QRScanner() {
         videoRef.current!,
         (res, err) => {
           if (res) {
-            console.error(res)
+            // console.error(res)
             const url = res.getText();
             setResult(url);
             dispatch(addRecept(url));
