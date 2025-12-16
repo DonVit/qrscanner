@@ -12,7 +12,6 @@ dist
 dist-ssr
 *.local
 dev-dist
-.storybook
 
 # Editor directories and files
 .vscode/*
