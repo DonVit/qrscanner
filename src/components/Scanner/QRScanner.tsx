@@ -100,7 +100,7 @@ export default function QRScanner() {
       <div>
         <video
           ref={videoRef}
-          style={{ width: 400, height: 300, border: "1px solid #ccc" }}
+          style={{ border: "1px solid #red" }}
           autoPlay
           muted
         />
