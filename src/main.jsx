@@ -6,6 +6,14 @@ import { store, persistor } from './store'
 import './main.css'
 import App from './App'
 
+const notifyConnectionStatus = () => {
+  store.dispatch({ type: 'network/STATUS_CHANGED', payload: navigator.onLine });
+};
+
+window.addEventListener('online', notifyConnectionStatus);
+window.addEventListener('offline', notifyConnectionStatus);
+notifyConnectionStatus();
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <Provider store={store}>

@@ -5,6 +5,7 @@ import {
 
 import receptsReducer from '../slices/receptsSlice'
 import scannerMenuReducer from '../slices/scannerMenuSlice'
+import saveStatusReducer from '../slices/saveStatusSlice'
 import loggerMiddleware from '../middlewares/loggerMiddleware'
 import sagaMiddleware from '../middlewares/sagaMiddleware'
 import rootSaga from '../sagas'
@@ -15,7 +16,8 @@ const middlewares = [sagaMiddleware, loggerMiddleware]
 export const store = configureStore({
   reducer: combineReducers({
     recepts: receptsReducer,
-    scannerMenu: scannerMenuReducer
+    scannerMenu: scannerMenuReducer,
+    saveStatus: saveStatusReducer,
   }),
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ thunk: false }).concat(middlewares),
