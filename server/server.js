@@ -7,9 +7,75 @@ import { randomUUID } from "node:crypto";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dataDir = path.join(__dirname, "data");
-const dataFile = path.join(dataDir, "receipts.json");
+const dbFile = path.join(dataDir, "receipts.sqlite");
 const port = Number(process.env.PORT || 4000);
 let writeQueue = Promise.resolve();
+
+await fs.mkdir(dataDir, { recursive: true });
+const initSqlJs = (await import("sql.js")).default;
+const SQL = await initSqlJs();
+let db = null;
+
+function normalizeReceiptRow(row) {
+  return {
+    ...row,
+    uploaded: Boolean(row.uploaded),
+  };
+}
+
+async function loadDatabase() {
+  try {
+    const raw = await fs.readFile(dbFile);
+    db = new SQL.Database(new Uint8Array(raw));
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      db = new SQL.Database();
+    } else {
+      throw error;
+    }
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS receipts (
+      id TEXT PRIMARY KEY,
+      createdAt TEXT NOT NULL,
+      url TEXT NOT NULL UNIQUE,
+      uploaded INTEGER NOT NULL
+    );
+  `);
+}
+
+async function saveDatabase() {
+  const data = db.export();
+  await fs.writeFile(dbFile, Buffer.from(data));
+}
+
+function readReceipts() {
+  const stmt = db.prepare("SELECT id, createdAt, url, uploaded FROM receipts ORDER BY createdAt");
+  const receipts = [];
+  while (stmt.step()) {
+    receipts.push(normalizeReceiptRow(stmt.getAsObject()));
+  }
+  stmt.free();
+  return receipts;
+}
+
+function getReceiptByUrl(url) {
+  const stmt = db.prepare("SELECT id, createdAt, url, uploaded FROM receipts WHERE url = ?");
+  stmt.bind([url]);
+  const found = stmt.step() ? normalizeReceiptRow(stmt.getAsObject()) : null;
+  stmt.free();
+  return found;
+}
+
+async function insertReceipt(receipt) {
+  const stmt = db.prepare("INSERT INTO receipts (id, createdAt, url, uploaded) VALUES (?, ?, ?, ?)");
+  stmt.run([receipt.id, receipt.createdAt, receipt.url, receipt.uploaded ? 1 : 0]);
+  stmt.free();
+  await saveDatabase();
+}
+
+await loadDatabase();
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,53 +101,37 @@ const normalizeUrl = (value) => {
   }
 };
 
-async function readReceipts() {
-  await fs.mkdir(dataDir, { recursive: true });
-
+async function migrateJsonToSqlite() {
+  const legacyFile = path.join(dataDir, "receipts.json");
   try {
-    const raw = await fs.readFile(dataFile, "utf8");
-    if (!raw || !raw.trim()) return [];
+    const raw = await fs.readFile(legacyFile, "utf8");
+    if (!raw || !raw.trim()) return;
 
-    try {
-      return JSON.parse(raw);
-    } catch (err) {
-      // Backup the corrupted file and start fresh to avoid crashing the server
-      const backup = `${dataFile}.corrupt.${Date.now()}`;
-      await fs.writeFile(backup, raw, "utf8");
-      console.error(`Backed up corrupted receipts to ${backup}`);
-      return [];
+    const receipts = JSON.parse(raw);
+    const seen = new Set();
+
+    for (const item of receipts) {
+      const normalizedUrl = normalizeUrl(item?.url);
+      if (!normalizedUrl || seen.has(normalizedUrl)) continue;
+      seen.add(normalizedUrl);
+
+      if (getReceiptByUrl(normalizedUrl)) continue;
+
+      await insertReceipt({
+        id: item.id ?? randomUUID(),
+        createdAt: item.createdAt ?? new Date().toISOString(),
+        url: normalizedUrl,
+        uploaded: true,
+      });
     }
   } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return [];
+    if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
+      console.warn("Failed to migrate legacy receipts.json:", error);
     }
-    throw error;
   }
 }
 
-async function writeReceipts(receipts) {
-  await fs.mkdir(dataDir, { recursive: true });
-  const tempFile = `${dataFile}.tmp`;
-  await fs.writeFile(tempFile, JSON.stringify(receipts, null, 2));
-  await fs.rename(tempFile, dataFile);
-}
-
-function dedupeReceipts(receipts) {
-  const seen = new Set();
-  const deduped = [];
-
-  for (const receipt of receipts) {
-    const normalizedUrl = normalizeUrl(receipt?.url);
-    if (!normalizedUrl || seen.has(normalizedUrl)) {
-      continue;
-    }
-
-    seen.add(normalizedUrl);
-    deduped.push(receipt);
-  }
-
-  return deduped;
-}
+await migrateJsonToSqlite();
 
 async function runExclusive(operation) {
   const previous = writeQueue;
@@ -132,17 +182,16 @@ const server = http.createServer(async (req, res) => {
       try {
         const payload = body ? JSON.parse(body) : {};
         const result = await runExclusive(async () => {
-          // Read and dedupe existing receipts first
-          const receipts = dedupeReceipts(await readReceipts());
           const normalizedUrlValue = normalizeUrl(payload.url ?? "");
+          if (!normalizedUrlValue) {
+            throw new Error("Invalid URL");
+          }
 
-          // If the URL already exists, return it and do not write anything
-          const existingReceipt = receipts.find((receipt) => normalizeUrl(receipt.url) === normalizedUrlValue);
+          const existingReceipt = getReceiptByUrl(normalizedUrlValue);
           if (existingReceipt) {
             return { statusCode: 200, payload: existingReceipt };
           }
 
-          // Create new record and persist
           const normalizedReceipt = {
             id: payload.id ?? randomUUID(),
             createdAt: payload.createdAt ?? new Date().toISOString(),
@@ -150,9 +199,7 @@ const server = http.createServer(async (req, res) => {
             uploaded: true,
           };
 
-          const finalList = dedupeReceipts([...receipts, normalizedReceipt]);
-          await writeReceipts(finalList);
-
+          insertReceipt(normalizedReceipt);
           return { statusCode: 201, payload: normalizedReceipt };
         });
 
