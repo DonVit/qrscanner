@@ -20,7 +20,7 @@ function getAuthUser(req) {
 
   const token = match[1];
   const [scheme, username] = token.split(":");
-  if (scheme === "login" || scheme === "register") {
+  if (scheme === "login" || scheme === "register" || scheme === "social") {
     return { username, token };
   }
 
@@ -198,6 +198,112 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": "application/json", ...corsHeaders });
     res.end(JSON.stringify(receipts));
     return;
+  }
+
+  // OAuth start endpoint: /auth/:provider
+  if (requestUrl.pathname.startsWith("/auth/") && req.method === "GET") {
+    const parts = requestUrl.pathname.split("/").filter(Boolean);
+    // parts => ["auth", ":provider"]
+    const provider = parts[1];
+    if (!provider || !["google", "facebook"].includes(provider)) {
+      res.writeHead(400, { "Content-Type": "application/json", ...corsHeaders });
+      res.end(JSON.stringify({ error: "Unsupported provider" }));
+      return;
+    }
+
+    const serverBase = process.env.SERVER_BASE_URL || `http://localhost:${port}`;
+    const redirectUri = `${serverBase}/auth/${provider}/callback`;
+
+    if (provider === "google") {
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const scope = encodeURIComponent("openid email profile");
+      const state = ""; // TODO: implement state
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=${encodeURIComponent(
+        clientId
+      )}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&access_type=online&prompt=select_account&state=${state}`;
+      res.writeHead(302, { Location: authUrl });
+      res.end();
+      return;
+    }
+
+    if (provider === "facebook") {
+      const clientId = process.env.FACEBOOK_CLIENT_ID;
+      const scope = encodeURIComponent("email,public_profile");
+      const authUrl = `https://www.facebook.com/v14.0/dialog/oauth?client_id=${encodeURIComponent(
+        clientId
+      )}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
+      res.writeHead(302, { Location: authUrl });
+      res.end();
+      return;
+    }
+  }
+
+  // OAuth callback: /auth/:provider/callback
+  if (requestUrl.pathname.startsWith("/auth/") && requestUrl.pathname.endsWith("/callback") && req.method === "GET") {
+    const parts = requestUrl.pathname.split("/").filter(Boolean);
+    const provider = parts[1];
+    const code = requestUrl.searchParams.get("code");
+
+    if (!code) {
+      res.writeHead(400, { "Content-Type": "application/json", ...corsHeaders });
+      res.end(JSON.stringify({ error: "Missing code" }));
+      return;
+    }
+
+    try {
+      let profile = null;
+      if (provider === "google") {
+        const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            code,
+            client_id: process.env.GOOGLE_CLIENT_ID,
+            client_secret: process.env.GOOGLE_CLIENT_SECRET,
+            redirect_uri: `${process.env.SERVER_BASE_URL || `http://localhost:${port}`}/auth/google/callback`,
+            grant_type: "authorization_code",
+          }),
+        });
+        const tokenData = await tokenResp.json();
+        const userInfoResp = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+          headers: { Authorization: `Bearer ${tokenData.access_token}` },
+        });
+        profile = await userInfoResp.json();
+        // profile: { sub, email, name, picture }
+      } else if (provider === "facebook") {
+        const tokenResp = await fetch(
+          `https://graph.facebook.com/v14.0/oauth/access_token?client_id=${encodeURIComponent(
+            process.env.FACEBOOK_CLIENT_ID
+          )}&redirect_uri=${encodeURIComponent(`${process.env.SERVER_BASE_URL || `http://localhost:${port}`}/auth/facebook/callback`)}&client_secret=${encodeURIComponent(
+            process.env.FACEBOOK_CLIENT_SECRET
+          )}&code=${encodeURIComponent(code)}`
+        );
+        const tokenData = await tokenResp.json();
+        const userInfoResp = await fetch(
+          `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(tokenData.access_token)}`
+        );
+        profile = await userInfoResp.json();
+        // profile: { id, name, email }
+      }
+
+      const username = (profile && (profile.email || profile.id)) || `social-${provider}`;
+      const displayName = (profile && (profile.name || profile.email || profile.id)) || username;
+      const appToken = `social:${username}:${provider}`;
+
+      // Redirect back to frontend with token in query params
+      const frontend = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+      const redirect = `${frontend}?authToken=${encodeURIComponent(appToken)}&username=${encodeURIComponent(
+        displayName
+      )}`;
+
+      res.writeHead(302, { Location: redirect });
+      res.end();
+      return;
+    } catch (error) {
+      res.writeHead(500, { "Content-Type": "application/json", ...corsHeaders });
+      res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+      return;
+    }
   }
 
   if (requestUrl.pathname === "/api/receipts" && req.method === "POST") {

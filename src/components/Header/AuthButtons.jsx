@@ -35,6 +35,12 @@ export default function AuthButtons() {
     setPassword("");
   };
 
+  const handleSocialLogin = (provider) => {
+    // Open backend OAuth start endpoint in new window/tab
+    // backend will redirect to provider and then callback to /auth/:provider/callback
+    window.location.href = `/auth/${provider}`;
+  };
+
   if (isSignedIn) {
     return (
       <div className="flex items-center gap-2">
@@ -70,6 +76,22 @@ export default function AuthButtons() {
       >
         {mode === "register" ? "Register" : "Sign in"}
       </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => handleSocialLogin("google")}
+          className="border rounded px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          Sign in with Google
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSocialLogin("facebook")}
+          className="border rounded px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          Sign in with Facebook
+        </button>
+      </div>
       <button
         type="button"
         onClick={() => setMode(mode === "login" ? "register" : "login")}

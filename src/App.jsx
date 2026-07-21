@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 
 import QRScanner from "./components/Scanner/QRScanner";
 import QRList from "./components/Scanner/QRList";
+import Header from "./components/Header/Header";
 import { List, ScanQrCode, CloudUpload } from "lucide-react";
 import { selectScannerMenu } from "./selectors/scannerMenuSelectors";
 import { setScannerMenu } from "./slices/scannerMenuSlice";
@@ -27,6 +28,7 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-gray-900 dark:bg-gray-900 dark:text-white">
+      <Header />
       <main className="flex-1 p-4 sm:p-8 space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
