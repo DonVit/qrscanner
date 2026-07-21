@@ -11,6 +11,22 @@ const dbFile = path.join(dataDir, "receipts.sqlite");
 const port = Number(process.env.PORT || 4000);
 let writeQueue = Promise.resolve();
 
+function getAuthUser(req) {
+  const header = req.headers.authorization || "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const token = match[1];
+  const [scheme, username] = token.split(":");
+  if (scheme === "login" || scheme === "register") {
+    return { username, token };
+  }
+
+  return null;
+}
+
 await fs.mkdir(dataDir, { recursive: true });
 const initSqlJs = (await import("sql.js")).default;
 const SQL = await initSqlJs();
@@ -39,8 +55,10 @@ async function loadDatabase() {
     CREATE TABLE IF NOT EXISTS receipts (
       id TEXT PRIMARY KEY,
       createdAt TEXT NOT NULL,
-      url TEXT NOT NULL UNIQUE,
-      uploaded INTEGER NOT NULL
+      url TEXT NOT NULL,
+      uploaded INTEGER NOT NULL,
+      username TEXT NOT NULL,
+      UNIQUE(username, url)
     );
   `);
 }
@@ -50,8 +68,15 @@ async function saveDatabase() {
   await fs.writeFile(dbFile, Buffer.from(data));
 }
 
-function readReceipts() {
-  const stmt = db.prepare("SELECT id, createdAt, url, uploaded FROM receipts ORDER BY createdAt");
+function readReceipts(username) {
+  const stmt = db.prepare(
+    username
+      ? "SELECT id, createdAt, url, uploaded, username FROM receipts WHERE username = ? ORDER BY createdAt"
+      : "SELECT id, createdAt, url, uploaded, username FROM receipts ORDER BY createdAt"
+  );
+  if (username) {
+    stmt.bind([username]);
+  }
   const receipts = [];
   while (stmt.step()) {
     receipts.push(normalizeReceiptRow(stmt.getAsObject()));
@@ -60,17 +85,19 @@ function readReceipts() {
   return receipts;
 }
 
-function getReceiptByUrl(url) {
-  const stmt = db.prepare("SELECT id, createdAt, url, uploaded FROM receipts WHERE url = ?");
-  stmt.bind([url]);
+function getReceiptByUrl(url, username) {
+  const stmt = db.prepare("SELECT id, createdAt, url, uploaded, username FROM receipts WHERE username = ? AND url = ?");
+  stmt.bind([username, url]);
   const found = stmt.step() ? normalizeReceiptRow(stmt.getAsObject()) : null;
   stmt.free();
   return found;
 }
 
 async function insertReceipt(receipt) {
-  const stmt = db.prepare("INSERT INTO receipts (id, createdAt, url, uploaded) VALUES (?, ?, ?, ?)");
-  stmt.run([receipt.id, receipt.createdAt, receipt.url, receipt.uploaded ? 1 : 0]);
+  const stmt = db.prepare(
+    "INSERT INTO receipts (id, createdAt, url, uploaded, username) VALUES (?, ?, ?, ?, ?)"
+  );
+  stmt.run([receipt.id, receipt.createdAt, receipt.url, receipt.uploaded ? 1 : 0, receipt.username]);
   stmt.free();
   await saveDatabase();
 }
@@ -115,13 +142,14 @@ async function migrateJsonToSqlite() {
       if (!normalizedUrl || seen.has(normalizedUrl)) continue;
       seen.add(normalizedUrl);
 
-      if (getReceiptByUrl(normalizedUrl)) continue;
+      if (getReceiptByUrl(normalizedUrl, "legacy")) continue;
 
       await insertReceipt({
         id: item.id ?? randomUUID(),
         createdAt: item.createdAt ?? new Date().toISOString(),
         url: normalizedUrl,
         uploaded: true,
+        username: "legacy",
       });
     }
   } catch (error) {
@@ -165,7 +193,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (requestUrl.pathname === "/api/receipts" && req.method === "GET") {
-    const receipts = await readReceipts();
+    const authUser = getAuthUser(req);
+    const receipts = readReceipts(authUser?.username);
     res.writeHead(200, { "Content-Type": "application/json", ...corsHeaders });
     res.end(JSON.stringify(receipts));
     return;
@@ -181,13 +210,20 @@ const server = http.createServer(async (req, res) => {
     req.on("end", async () => {
       try {
         const payload = body ? JSON.parse(body) : {};
+        const authUser = getAuthUser(req);
+        if (!authUser?.username) {
+          res.writeHead(401, { "Content-Type": "application/json", ...corsHeaders });
+          res.end(JSON.stringify({ error: "Authentication required" }));
+          return;
+        }
+
         const result = await runExclusive(async () => {
           const normalizedUrlValue = normalizeUrl(payload.url ?? "");
           if (!normalizedUrlValue) {
             throw new Error("Invalid URL");
           }
 
-          const existingReceipt = getReceiptByUrl(normalizedUrlValue);
+          const existingReceipt = getReceiptByUrl(normalizedUrlValue, authUser.username);
           if (existingReceipt) {
             return { statusCode: 200, payload: existingReceipt };
           }
@@ -197,9 +233,10 @@ const server = http.createServer(async (req, res) => {
             createdAt: payload.createdAt ?? new Date().toISOString(),
             url: normalizedUrlValue,
             uploaded: true,
+            username: authUser.username,
           };
 
-          insertReceipt(normalizedReceipt);
+          await insertReceipt(normalizedReceipt);
           return { statusCode: 201, payload: normalizedReceipt };
         });
 

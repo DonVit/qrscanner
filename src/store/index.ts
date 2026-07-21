@@ -6,6 +6,7 @@ import {
 import receptsReducer from '../slices/receptsSlice'
 import scannerMenuReducer from '../slices/scannerMenuSlice'
 import saveStatusReducer from '../slices/saveStatusSlice'
+import authReducer from '../slices/authSlice'
 import loggerMiddleware from '../middlewares/loggerMiddleware'
 import sagaMiddleware from '../middlewares/sagaMiddleware'
 import rootSaga from '../sagas'
@@ -18,6 +19,7 @@ export const store = configureStore({
     recepts: receptsReducer,
     scannerMenu: scannerMenuReducer,
     saveStatus: saveStatusReducer,
+    auth: authReducer,
   }),
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ thunk: false }).concat(middlewares),

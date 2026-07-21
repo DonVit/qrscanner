@@ -14,7 +14,11 @@ export const selectReceptsState1 = (state: RootState): Receipts => state.recepts
 export const selectReceptsState = createSelector(
   (state: { recepts: Receipts }) => state.recepts,
   (recepts) =>
-    Object.values(recepts).filter(
-      (r): r is Recept => typeof r === "object" && "id" in r
-    )
+    Object.values(recepts)
+      .filter((r): r is Recept => typeof r === "object" && "id" in r)
+      .sort((a, b) => {
+        const aTime = Date.parse(a.createdAt);
+        const bTime = Date.parse(b.createdAt);
+        return bTime - aTime;
+      })
 );

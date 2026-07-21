@@ -17,9 +17,11 @@ const QRItem = ({ recept }: ReceptCardProps) => {
       <div className={`p-2 rounded-full mr-2 border ${recept.uploaded ? "border-green-200 bg-green-50 text-green-800" : "border-yellow-200 bg-yellow-50 text-yellow-800"}`}>
         {recept.uploaded ? <CheckCircle2 size={18} /> : <Hourglass size={18} />}
       </div>
-      <button className="p-2 text-gray-500 hover:text-red-600" onClick={()=>dispatch(removeRecept(recept.id))}>
+      <div className={`p-2 rounded-full mr-2 border border-red-200 bg-red-50 text-red-800 hover:text-red-600`} onClick={() => dispatch(removeRecept(recept.id))}>
+
         <CircleX size={18} />
-      </button>
+
+      </div>
     </div>
   )
 };

@@ -1,0 +1,17 @@
+[Unit]
+Description=QR Scanner backend service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/apps.doni.md/qrscanner
+ExecStart=/usr/bin/node /var/www/apps.doni.md/qrscanner/server/server.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+# Adjust User and Group as needed for your deployment environment.
+# User=donvit
+# Group=www-data
+
+[Install]
+WantedBy=multi-user.target
