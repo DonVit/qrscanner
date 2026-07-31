@@ -25,7 +25,7 @@ Open the app in your browser at the URL shown by Vite.
 Run the backend server from the `qrscanner` root:
 
 ```bash
-npm run server
+node -r dotenv/config server/server-express.js
 ```
 
 The backend listens on `http://localhost:4000` by default.

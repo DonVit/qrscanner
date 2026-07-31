@@ -6,6 +6,10 @@ import type { AuthState } from "../slices/authSlice";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/receipts";
 
+export function getSyncStatusMessage(pendingCount: number) {
+  return pendingCount === 0 ? "All receipts are already uploaded." : "Syncing receipts...";
+}
+
 async function uploadReceipt(receipt: Recept, auth: AuthState) {
   const response = await fetch(API_URL, {
     method: "POST",
@@ -17,7 +21,8 @@ async function uploadReceipt(receipt: Recept, auth: AuthState) {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to upload receipt");
+    const errorText = await response.text();
+    throw new Error(errorText || "Failed to upload receipt");
   }
 
   return response.json();
@@ -45,14 +50,9 @@ function* handleSyncPendingReceipts(): Generator<any, void, any> {
 
   const state: RootState = yield select((currentState: RootState) => currentState);
   const auth = state.auth;
+  const hasAuth = Boolean(auth?.user && auth?.token);
 
-  if (!auth?.user || !auth?.token) {
-    yield put(
-      setSaveStatus({
-        type: "error",
-        message: "Sign in to save scans on the backend.",
-      })
-    );
+  if (!hasAuth) {
     return;
   }
 
@@ -60,20 +60,31 @@ function* handleSyncPendingReceipts(): Generator<any, void, any> {
     (receipt) => receipt.uploaded === false
   );
 
+  if (pendingReceipts.length === 0) {
+    yield put(
+      setSaveStatus({
+        type: "success",
+        message: getSyncStatusMessage(0),
+      })
+    );
+    return;
+  }
+
+  yield put(
+    setSaveStatus({
+      type: "pending",
+      message: getSyncStatusMessage(pendingReceipts.length),
+    })
+  );
+
+  let syncFailed = false;
   for (const receipt of pendingReceipts) {
     try {
-      const response = yield call(uploadReceipt, receipt, auth);
+      yield call(uploadReceipt, receipt, auth);
       yield put(markUploaded(receipt.id));
-      yield put(
-        setSaveStatus({
-          type: "success",
-          message: response?.id
-            ? "Receipt synced successfully."
-            : "Receipt synced, but server response was unexpected.",
-        })
-      );
     } catch (error) {
       console.error("Unable to sync pending receipt", error);
+      syncFailed = true;
       yield put(
         setSaveStatus({
           type: "error",
@@ -85,6 +96,15 @@ function* handleSyncPendingReceipts(): Generator<any, void, any> {
       );
       break;
     }
+  }
+
+  if (!syncFailed) {
+    yield put(
+      setSaveStatus({
+        type: "success",
+        message: "All pending receipts synced successfully.",
+      })
+    );
   }
 }
 

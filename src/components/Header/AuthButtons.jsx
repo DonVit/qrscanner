@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { loginSuccess, logout } from "../../slices/authSlice";
+import { syncPendingReceiptsRequested } from "../../slices/receptsSlice";
+import { clearSaveStatus } from "../../slices/saveStatusSlice";
+
+const AUTH_BASE_URL =
+  import.meta.env.VITE_AUTH_URL ||
+  (import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "")
+    : window.location.origin);
 
 export default function AuthButtons() {
   const dispatch = useDispatch();
@@ -26,19 +34,20 @@ export default function AuthButtons() {
         token,
       })
     );
+    dispatch(clearSaveStatus());
+    dispatch(syncPendingReceiptsRequested());
     setPassword("");
   };
 
   const handleLogout = () => {
     dispatch(logout());
+    dispatch(clearSaveStatus());
     setUsername("");
     setPassword("");
   };
 
   const handleSocialLogin = (provider) => {
-    // Open backend OAuth start endpoint in new window/tab
-    // backend will redirect to provider and then callback to /auth/:provider/callback
-    window.location.href = `/auth/${provider}`;
+    window.location.href = `${AUTH_BASE_URL}/auth/${provider}`;
   };
 
   if (isSignedIn) {
@@ -57,25 +66,6 @@ export default function AuthButtons() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2">
-      <input
-        value={username}
-        onChange={(event) => setUsername(event.target.value)}
-        placeholder="Username"
-        className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900"
-      />
-      <input
-        type="password"
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-        placeholder="Password"
-        className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900"
-      />
-      <button
-        type="submit"
-        className="bg-gray-900 text-white dark:bg-gray-200 dark:text-black rounded px-3 py-1 text-sm hover:opacity-90"
-      >
-        {mode === "register" ? "Register" : "Sign in"}
-      </button>
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -84,21 +74,7 @@ export default function AuthButtons() {
         >
           Sign in with Google
         </button>
-        <button
-          type="button"
-          onClick={() => handleSocialLogin("facebook")}
-          className="border rounded px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-        >
-          Sign in with Facebook
-        </button>
       </div>
-      <button
-        type="button"
-        onClick={() => setMode(mode === "login" ? "register" : "login")}
-        className="border rounded px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-      >
-        {mode === "login" ? "Register" : "Sign in"}
-      </button>
     </form>
   );
 }
