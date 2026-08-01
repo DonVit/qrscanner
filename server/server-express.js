@@ -51,8 +51,7 @@ async function loadDatabase() {
       createdAt TEXT NOT NULL,
       url TEXT NOT NULL,
       uploaded INTEGER NOT NULL,
-      username TEXT NOT NULL,
-      UNIQUE(username, url)
+      username TEXT NOT NULL
     );
   `);
 
@@ -60,6 +59,28 @@ async function loadDatabase() {
   const columns = tableInfo[0]?.values?.map((row) => row[1]) ?? [];
   if (!columns.includes('username')) {
     db.exec('ALTER TABLE receipts ADD COLUMN username TEXT NOT NULL DEFAULT ""');
+  }
+
+  const indexes = db.exec('PRAGMA index_list(receipts)');
+  const hasUsernameUrlUniqueIndex = (indexes[0]?.values ?? []).some(
+    (row) => row[1] === 'sqlite_autoindex_receipts_1' && Number(row[2]) === 1
+  );
+
+  if (hasUsernameUrlUniqueIndex) {
+    db.exec(`
+      DROP TABLE IF EXISTS receipts_new;
+      CREATE TABLE receipts_new (
+        id TEXT PRIMARY KEY,
+        createdAt TEXT NOT NULL,
+        url TEXT NOT NULL,
+        uploaded INTEGER NOT NULL,
+        username TEXT NOT NULL
+      );
+      INSERT INTO receipts_new (id, createdAt, url, uploaded, username)
+      SELECT id, createdAt, url, uploaded, username FROM receipts;
+      DROP TABLE receipts;
+      ALTER TABLE receipts_new RENAME TO receipts;
+    `);
   }
 }
 
@@ -81,27 +102,24 @@ function readReceipts(username) {
   return receipts;
 }
 
-function getReceiptByUrl(url, username) {
-  const stmt = db.prepare('SELECT id, createdAt, url, uploaded, username FROM receipts WHERE username = ? AND url = ?');
-  stmt.bind([username, url]);
+function getReceiptById(receiptId, username) {
+  if (!receiptId) return null;
+
+  const stmt = db.prepare('SELECT id, createdAt, url, uploaded, username FROM receipts WHERE id = ? AND username = ?');
+  stmt.bind([receiptId, username]);
   const found = stmt.step() ? normalizeReceiptRow(stmt.getAsObject()) : null;
   stmt.free();
+  return found;
+}
 
-  if (found) {
-    return found;
-  }
+function getReceiptByUrl(url, username) {
+  if (!url || !username) return null;
 
-  if (username) {
-    const fallbackStmt = db.prepare(
-      'SELECT id, createdAt, url, uploaded, username FROM receipts WHERE url = ? AND (username IS NULL OR TRIM(username) = "") ORDER BY createdAt LIMIT 1'
-    );
-    fallbackStmt.bind([url]);
-    const fallbackFound = fallbackStmt.step() ? normalizeReceiptRow(fallbackStmt.getAsObject()) : null;
-    fallbackStmt.free();
-    return fallbackFound;
-  }
-
-  return null;
+  const stmt = db.prepare('SELECT id, createdAt, url, uploaded, username FROM receipts WHERE username = ? AND url = ?');
+  stmt.bind([normalizeUsername(username), url]);
+  const found = stmt.step() ? normalizeReceiptRow(stmt.getAsObject()) : null;
+  stmt.free();
+  return found;
 }
 
 async function insertReceipt(receipt) {
@@ -290,20 +308,14 @@ app.post('/api/receipts', ensureAuth, async (req, res) => {
       throw new Error('Invalid URL');
     }
 
-    const existingReceipt = getReceiptByUrl(normalizedUrlValue, req.authUser.username);
+    const receiptId = payload.id ?? randomUUID();
+    const existingReceipt = getReceiptById(receiptId, req.authUser.username) || getReceiptByUrl(normalizedUrlValue, req.authUser.username);
     if (existingReceipt) {
-      const needsAssignment = !existingReceipt.username || normalizeUsername(existingReceipt.username) === '';
-      if (needsAssignment) {
-        await assignReceiptToUser(normalizedUrlValue, req.authUser.username);
-        await backfillMissingUsername(req.authUser.username);
-        const reassignedReceipt = getReceiptByUrl(normalizedUrlValue, req.authUser.username);
-        return res.status(200).json(reassignedReceipt || existingReceipt);
-      }
       return res.status(200).json(existingReceipt);
     }
 
     const normalizedReceipt = {
-      id: payload.id ?? randomUUID(),
+      id: receiptId,
       createdAt: payload.createdAt ?? new Date().toISOString(),
       url: normalizedUrlValue,
       uploaded: true,

@@ -1,6 +1,6 @@
 import { useDispatch, useSelector } from "react-redux";
 import { selectReceptsState } from "../../selectors/receptsSelectors";
-import { Recept, removeRecept } from "../../slices/receptsSlice";
+import { isValidUrl, Recept, removeRecept } from "../../slices/receptsSlice";
 import { CircleX, Hourglass, CheckCircle2 } from "lucide-react";
 
 type ReceptCardProps = {
@@ -28,9 +28,11 @@ const QRItem = ({ recept }: ReceptCardProps) => {
 
 export default function QRList() {
   const recepts = useSelector(selectReceptsState);
+  const visibleReceipts = recepts.filter((r) => isValidUrl(r.url));
+
   return (
     <div>
-      {recepts.map((r) => (
+      {visibleReceipts.map((r) => (
         <QRItem key={r.id} recept={r} />
       ))}
     </div>

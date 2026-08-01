@@ -21,6 +21,18 @@ const initialState: Receipts = {};
 
 export const normalizeUrl = (value: string) => value.trim();
 
+export const isValidUrl = (value: string) => {
+  const trimmed = normalizeUrl(value);
+  if (!trimmed) return false;
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 const receptsSlice = createSlice({
   name: "recepts",
   initialState,
@@ -29,7 +41,7 @@ const receptsSlice = createSlice({
     addRecept: (state: Receipts, action: PayloadAction<string>): Receipts => {
       const url = normalizeUrl(action.payload);
 
-      if (!url) return state;
+      if (!url || !isValidUrl(url)) return state;
 
       const exists = Object.values(state).some((r) => normalizeUrl(r.url) === url);
       if (exists) return state;

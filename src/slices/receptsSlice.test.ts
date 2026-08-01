@@ -10,4 +10,9 @@ describe("recepts reducer", () => {
     expect(values).toHaveLength(1);
     expect(values[0].url).toBe("https://example.com/receipt");
   });
+
+  it("rejects malformed scan content that is not a valid URL", () => {
+    const state = receptsReducer({}, addRecept("not a valid url"));
+    expect(Object.values(state)).toHaveLength(0);
+  });
 });

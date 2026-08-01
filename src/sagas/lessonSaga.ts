@@ -1,5 +1,5 @@
 import { all, call, put, select, takeEvery } from "redux-saga/effects";
-import { addRecept, markUploaded, syncPendingReceiptsRequested, Recept } from "../slices/receptsSlice";
+import { addRecept, isValidUrl, markUploaded, syncPendingReceiptsRequested, Recept } from "../slices/receptsSlice";
 import { setSaveStatus } from "../slices/saveStatusSlice";
 import type { RootState } from "../store";
 import type { AuthState } from "../slices/authSlice";
@@ -56,11 +56,12 @@ function* handleSyncPendingReceipts(): Generator<any, void, any> {
     return;
   }
 
-  const pendingReceipts = Object.values(state.recepts).filter(
-    (receipt) => receipt.uploaded === false
+  const receiptsToSync = Object.values(state.recepts).filter(
+    (receipt): receipt is Recept =>
+      Boolean(receipt && typeof receipt === "object" && "id" in receipt && "url" in receipt && isValidUrl(receipt.url))
   );
 
-  if (pendingReceipts.length === 0) {
+  if (receiptsToSync.length === 0) {
     yield put(
       setSaveStatus({
         type: "success",
@@ -73,12 +74,12 @@ function* handleSyncPendingReceipts(): Generator<any, void, any> {
   yield put(
     setSaveStatus({
       type: "pending",
-      message: getSyncStatusMessage(pendingReceipts.length),
+      message: getSyncStatusMessage(receiptsToSync.length),
     })
   );
 
   let syncFailed = false;
-  for (const receipt of pendingReceipts) {
+  for (const receipt of receiptsToSync) {
     try {
       yield call(uploadReceipt, receipt, auth);
       yield put(markUploaded(receipt.id));
