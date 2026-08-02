@@ -43,6 +43,24 @@ This project requires both:
 - A built frontend deployed to nginx under `/qrscanner/`
 - A Node backend running separately on the server and proxied by nginx at `/api/`
 
+### One-command deployment helper
+
+Run the helper from the project root:
+
+```bash
+npm run deploy
+```
+
+This will:
+
+1. Create a timestamped backup of the current SQLite database at `server/data/backups/`
+2. Build the frontend into `dist/`
+3. Create a deployment package in `deploy/` with:
+   - built frontend files under `deploy/frontend/`
+   - backend files and runtime scripts under `deploy/backend/`
+
+The generated deployment bundle is ready to copy to your server.
+
 ### Frontend deployment
 
 1. Build the frontend:
