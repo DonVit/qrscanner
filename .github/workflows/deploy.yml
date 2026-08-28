@@ -1,0 +1,117 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qrscanner-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Prepare deployment artifact
+        run: npm run deploy
+
+      - name: Validate required deploy secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SERVER_NAME: ${{ secrets.DEPLOY_SERVER_NAME }}
+          DEPLOY_FRONTEND_URL: ${{ secrets.DEPLOY_FRONTEND_URL }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_DIR DEPLOY_SSH_KEY DEPLOY_SERVER_NAME DEPLOY_FRONTEND_URL; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required GitHub secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          if ! [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]] || [ "$DEPLOY_PORT" -lt 1 ] || [ "$DEPLOY_PORT" -gt 65535 ]; then
+            echo "DEPLOY_PORT must be a valid integer between 1 and 65535"
+            exit 1
+          fi
+
+          if ! [[ "$DEPLOY_DIR" =~ ^/ ]]; then
+            echo "DEPLOY_DIR must be an absolute Linux path, for example /var/www/qrscanner"
+            exit 1
+          fi
+
+          if ! [[ "$DEPLOY_FRONTEND_URL" =~ ^https?:// ]]; then
+            echo "DEPLOY_FRONTEND_URL must start with http:// or https://"
+            exit 1
+          fi
+
+          if ! [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
+            echo "DEPLOY_HOST contains unsupported characters"
+            exit 1
+          fi
+
+          if ! [[ "$DEPLOY_SERVER_NAME" =~ ^[A-Za-z0-9.-]+$ ]]; then
+            echo "DEPLOY_SERVER_NAME contains unsupported characters"
+            exit 1
+          fi
+
+          FRONTEND_HOST="$(printf '%s' "$DEPLOY_FRONTEND_URL" | sed -E 's#^https?://([^/:]+).*$#\1#')"
+          FRONTEND_SCHEME="$(printf '%s' "$DEPLOY_FRONTEND_URL" | sed -E 's#^(https?)://.*$#\1#')"
+
+          if [ "$FRONTEND_HOST" != "$DEPLOY_SERVER_NAME" ]; then
+            echo "DEPLOY_FRONTEND_URL host must exactly match DEPLOY_SERVER_NAME"
+            echo "Current host: $FRONTEND_HOST"
+            echo "Expected host: $DEPLOY_SERVER_NAME"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_SERVER_NAME" != "$DEPLOY_HOST" ] && [ "$FRONTEND_SCHEME" != "https" ]; then
+            echo "When DEPLOY_SERVER_NAME is a domain, DEPLOY_FRONTEND_URL must use https://"
+            exit 1
+          fi
+
+      - name: Deploy to droplet
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SERVER_NAME: ${{ secrets.DEPLOY_SERVER_NAME }}
+          DEPLOY_FRONTEND_URL: ${{ secrets.DEPLOY_FRONTEND_URL }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          npm run deploy -- --remote --host "$DEPLOY_HOST" --user "$DEPLOY_USER" --port "$DEPLOY_PORT" --deploy-dir "$DEPLOY_DIR" --ssh-key "$HOME/.ssh/deploy_key" --server-name "$DEPLOY_SERVER_NAME" --frontend-url "$DEPLOY_FRONTEND_URL"
