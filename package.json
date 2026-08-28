@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:remote": "node scripts/deploy.mjs --remote"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.9.2",

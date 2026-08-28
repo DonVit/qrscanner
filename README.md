@@ -43,6 +43,8 @@ This project requires both:
 - A built frontend deployed to nginx under `/qrscanner/`
 - A Node backend running separately on the server and proxied by nginx at `/api/`
 
+Detailed step-by-step server setup for a new DigitalOcean $6 Droplet is documented in [docs/digitalocean-first-day-checklist.md](docs/digitalocean-first-day-checklist.md).
+
 ### One-command deployment helper
 
 Run the helper from the project root:
@@ -60,6 +62,70 @@ This will:
    - backend files and runtime scripts under `deploy/backend/`
 
 The generated deployment bundle is ready to copy to your server.
+
+### Automated droplet deployment
+
+To package and deploy directly to a DigitalOcean droplet over SSH, run:
+
+```bash
+npm run deploy:remote -- --host 203.0.113.10 --user root --deploy-dir /var/www/qrscanner --ssh-key ~/.ssh/id_ed25519 --server-name example.com --frontend-url https://example.com
+```
+
+The automation will:
+
+- build the frontend and prepare the deployment bundle
+- upload the frontend and backend to the droplet
+- install runtime dependencies on the server
+- configure nginx to serve the frontend and proxy API requests to the backend
+- start the backend with pm2
+
+You can also set these as environment variables instead of passing them on the command line:
+
+### GitHub Actions CI/CD
+
+A workflow is available at [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It will:
+
+- install dependencies
+- build the frontend
+- prepare the deployment artifact
+- deploy to your droplet over SSH
+
+It runs automatically on push to `main`, and can also be started manually from the GitHub Actions tab using `workflow_dispatch`.
+
+Add these repository secrets in GitHub:
+
+- DEPLOY_HOST
+- DEPLOY_USER
+- DEPLOY_PORT
+- DEPLOY_DIR
+- DEPLOY_SSH_KEY
+- DEPLOY_SERVER_NAME
+- DEPLOY_FRONTEND_URL
+
+How to add secrets:
+
+1. Open your GitHub repository.
+2. Go to Settings -> Secrets and variables -> Actions.
+3. Click New repository secret and add each value above.
+4. For `DEPLOY_SSH_KEY`, paste the full private key content (including BEGIN/END lines).
+
+How to trigger deploy manually from GitHub:
+
+1. Open Actions in your repository.
+2. Select the Build and Deploy workflow.
+3. Click Run workflow.
+4. Choose the `main` branch and run.
+
+```bash
+export DEPLOY_HOST=203.0.113.10
+export DEPLOY_USER=root
+export DEPLOY_PORT=22
+export DEPLOY_DIR=/var/www/qrscanner
+export DEPLOY_SSH_KEY=~/.ssh/id_ed25519
+export DEPLOY_SERVER_NAME=example.com
+export DEPLOY_FRONTEND_URL=https://example.com
+npm run deploy:remote
+```
 
 ### Frontend deployment
 
