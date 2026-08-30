@@ -46,6 +46,10 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_SERVER_NAME: ${{ secrets.DEPLOY_SERVER_NAME }}
           DEPLOY_FRONTEND_URL: ${{ secrets.DEPLOY_FRONTEND_URL }}
+          APP_PORT: ${{ secrets.APP_PORT }}
+          APP_NODE_ENV: ${{ secrets.APP_NODE_ENV }}
+          APP_FRONTEND_URL: ${{ secrets.APP_FRONTEND_URL }}
+          APP_SESSION_SECRET: ${{ secrets.APP_SESSION_SECRET }}
         run: |
           set -euo pipefail
 
@@ -56,6 +60,17 @@ jobs:
               missing=1
             fi
           done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          for name in APP_PORT APP_NODE_ENV APP_SESSION_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required GitHub secret: $name"
+              missing=1
+            fi
+          done
+
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
@@ -133,6 +148,12 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_SERVER_NAME: ${{ secrets.DEPLOY_SERVER_NAME }}
           DEPLOY_FRONTEND_URL: ${{ secrets.DEPLOY_FRONTEND_URL }}
+          APP_PORT: ${{ secrets.APP_PORT }}
+          APP_NODE_ENV: ${{ secrets.APP_NODE_ENV }}
+          APP_FRONTEND_URL: ${{ secrets.APP_FRONTEND_URL }}
+          APP_GOOGLE_CLIENT_ID: ${{ secrets.APP_GOOGLE_CLIENT_ID }}
+          APP_GOOGLE_CLIENT_SECRET: ${{ secrets.APP_GOOGLE_CLIENT_SECRET }}
+          APP_SESSION_SECRET: ${{ secrets.APP_SESSION_SECRET }}
         run: |
           mkdir -p ~/.ssh
           echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key

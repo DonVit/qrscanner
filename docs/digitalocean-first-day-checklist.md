@@ -144,6 +144,15 @@ Add these repository secrets in GitHub:
 - `DEPLOY_SERVER_NAME`
 - `DEPLOY_FRONTEND_URL`
 
+Add these runtime app secrets in GitHub (used to generate backend `.env` on deploy):
+
+- `APP_PORT` (example: `4000`)
+- `APP_NODE_ENV` (example: `production`)
+- `APP_FRONTEND_URL` (example: `https://apps.example.com`)
+- `APP_GOOGLE_CLIENT_ID` (optional if OAuth disabled)
+- `APP_GOOGLE_CLIENT_SECRET` (optional if OAuth disabled)
+- `APP_SESSION_SECRET` (required, long random value)
+
 Secret definitions (what value goes in each):
 
 - `DEPLOY_HOST`: Droplet public IPv4 address. Example: `203.0.113.10`
@@ -213,6 +222,7 @@ The same workflow also runs automatically on every push to `main`.
 Fail-fast validation in workflow:
 
 - Deployment stops if any required secret is missing.
+- Runtime deploy secrets `APP_PORT`, `APP_NODE_ENV`, and `APP_SESSION_SECRET` are required.
 - `DEPLOY_PORT` must be numeric and in range `1..65535`.
 - `DEPLOY_DIR` must be an absolute Linux path (starts with `/`).
 - `DEPLOY_FRONTEND_URL` must start with `http://` or `https://`.
