@@ -241,7 +241,7 @@ async function deployRemote(config) {
     `if [ -f ${remoteBackendDir}/server/data/receipts.sqlite ]; then cp ${remoteBackendDir}/server/data/receipts.sqlite ${remoteBackendDir}/server/data/backups/receipts-$(date +%Y%m%d%H%M%S).sqlite; fi`,
     `cd ${remoteBackendDir}`,
     `npm install --omit=dev --no-audit`,
-    `cat > .env <<'EOF'\nPORT=4000\nNODE_ENV=production\nFRONTEND_URL=${frontendUrl}\nGOOGLE_CLIENT_ID=\nGOOGLE_CLIENT_SECRET=\nSESSION_SECRET=change-me\nEOF`,
+    `printf '%s\n' 'PORT=4000' 'NODE_ENV=production' 'FRONTEND_URL=${frontendUrl}' 'GOOGLE_CLIENT_ID=' 'GOOGLE_CLIENT_SECRET=' 'SESSION_SECRET=change-me' > .env`,
     `pm2 delete qrscanner >/dev/null 2>&1 || true`,
     `pm2 start server/server-express.js --name qrscanner --cwd ${remoteBackendDir}`,
     `pm2 save`,
