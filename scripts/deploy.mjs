@@ -216,7 +216,6 @@ async function deployRemote(config) {
   const frontendUrl = config.frontendUrl || `http://${config.host}`;
   const appFrontendUrl = config.appFrontendUrl || frontendUrl;
   const appFrontendOrigin = getOrigin(config.appFrontendOrigin || appFrontendUrl, frontendUrl);
-  const useHttps = frontendUrl.startsWith('https://');
   const serverName = config.serverName || config.host;
   const remoteDir = normalizeRemotePath(config.deployDir || '/var/www/qrscanner');
   const remoteBackendDir = `${remoteDir}/backend`;
@@ -227,7 +226,8 @@ async function deployRemote(config) {
     REMOTE_FRONTEND_DIR: remoteFrontendDir,
     CERT_DIR: certDir,
   };
-  const nginxConfig = renderTemplate(useHttps ? 'nginx-https.conf' : 'nginx-http.conf', templateReplacements);
+  const httpNginxConfig = renderTemplate('nginx-http.conf', templateReplacements);
+  const httpsNginxConfig = renderTemplate('nginx-https.conf', templateReplacements);
   const isRootUser = config.user === 'root';
   const sudoPrefix = isRootUser ? '' : 'sudo -n ';
   const useSudo = !isRootUser;
@@ -289,7 +289,7 @@ async function deployRemote(config) {
     `pm2 delete qrscanner >/dev/null 2>&1 || true`,
     `pm2 start server/server-express.js --name qrscanner --cwd ${remoteBackendDir}`,
     `pm2 save`,
-    `printf '%s' ${shellSingleQuote(nginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null`,
+    `if [ -f ${certDir}/fullchain.pem ] && [ -f ${certDir}/privkey.pem ]; then printf '%s' ${shellSingleQuote(httpsNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; else printf '%s' ${shellSingleQuote(httpNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; fi`,
     `${useSudo ? 'sudo ' : ''}ln -sf /etc/nginx/sites-available/qrscanner /etc/nginx/sites-enabled/qrscanner`,
     `if command -v systemctl >/dev/null 2>&1; then ${useSudo ? 'sudo ' : ''}systemctl reload nginx || ${useSudo ? 'sudo ' : ''}systemctl restart nginx; else ${useSudo ? 'sudo ' : ''}service nginx reload || ${useSudo ? 'sudo ' : ''}service nginx restart; fi`,
   ].join(' && ');
