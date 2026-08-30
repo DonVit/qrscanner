@@ -209,8 +209,10 @@ async function deployRemote(config) {
     `curl -fsSL https://deb.nodesource.com/setup_20.x | ${sudoPrefix}bash -`,
     `${sudoPrefix}apt-get install -y nodejs`,
     `${sudoPrefix}npm install -g pm2`,
-    `rm -rf ${remoteBackendDir} ${remoteFrontendDir}`,
-    `mkdir -p ${remoteBackendDir} ${remoteFrontendDir}`,
+    `${sudoPrefix}rm -rf ${remoteBackendDir} ${remoteFrontendDir}`,
+    `${sudoPrefix}mkdir -p ${remoteBackendDir} ${remoteFrontendDir}`,
+    `${sudoPrefix}chown -R ${config.user}:${config.user} ${remoteDir}`,
+    `${sudoPrefix}chmod -R u+rwX ${remoteDir}`,
   ].join(' && ');
 
   runCommand('ssh', buildSshArgs(config, remoteBootstrap));
