@@ -304,7 +304,7 @@ async function deployRemote(config) {
     `pm2 delete qrscanner >/dev/null 2>&1 || true`,
     `pm2 start server/server-express.js --name qrscanner --cwd ${remoteBackendDir}`,
     `pm2 save`,
-    `if [ -f ${certDir}/fullchain.pem ] && [ -f ${certDir}/privkey.pem ]; then printf '%s' ${shellSingleQuote(httpsNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; else printf '%s' ${shellSingleQuote(httpNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; fi`,
+    `if ${useSudo ? 'sudo ' : ''}test -f ${certDir}/fullchain.pem && ${useSudo ? 'sudo ' : ''}test -f ${certDir}/privkey.pem; then printf '%s' ${shellSingleQuote(httpsNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; else printf '%s' ${shellSingleQuote(httpNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; fi`,
     `${useSudo ? 'sudo ' : ''}ln -sf /etc/nginx/sites-available/qrscanner /etc/nginx/sites-enabled/qrscanner`,
     `if command -v systemctl >/dev/null 2>&1; then ${useSudo ? 'sudo ' : ''}systemctl reload nginx || ${useSudo ? 'sudo ' : ''}systemctl restart nginx; else ${useSudo ? 'sudo ' : ''}service nginx reload || ${useSudo ? 'sudo ' : ''}service nginx restart; fi`,
   ].join(' && ');
