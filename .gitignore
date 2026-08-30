@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 dev-dist
+deploy
+server/data/
 
 # Editor directories and files
 .vscode/*

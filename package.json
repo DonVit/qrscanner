@@ -5,16 +5,24 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "node server/server-express.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:remote": "node scripts/deploy.mjs --remote"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.9.2",
     "@zxing/browser": "^0.1.5",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.4",
     "lucide-react": "^0.553.0",
+    "passport": "^0.6.0",
+    "passport-google-oauth20": "^2.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-redux": "^9.2.0",
@@ -22,7 +30,8 @@
     "redux-persist": "^6.0.0",
     "redux-saga": "^1.4.2",
     "redux-sounds": "^3.3.2",
-    "reselect": "^5.1.1"
+    "reselect": "^5.1.1",
+    "sql.js": "^1.8.0"
   },
   "devDependencies": {
     "@chromatic-com/storybook": "^4.1.1",
@@ -49,5 +58,8 @@
     "vite": "^7.1.7",
     "vite-plugin-pwa": "^1.1.0",
     "vitest": "^3.2.4"
+  },
+  "vite": {
+    "auth": "http://localhost:4000"
   }
 }

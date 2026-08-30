@@ -3,30 +3,47 @@ import { persistReducer } from "redux-persist";
 import storage from "redux-persist/lib/storage";
 import { uniqueNumberId } from "../utils/utils";
 
-const persistConfig = {
-  key: "recepts",
-  storage,
-};
-
 export interface Recept {
-  id: number;
+  id: number | string;
   createdAt: string;
   url: string;
   uploaded: boolean;
 }
 
-export type Receipts = Record<number, Recept>;
+const persistConfig = {
+  key: "recepts",
+  storage,
+};
+
+export type Receipts = Record<string, Recept>;
 
 const initialState: Receipts = {};
+
+export const normalizeUrl = (value: string) => value.trim();
+
+export const isValidUrl = (value: string) => {
+  const trimmed = normalizeUrl(value);
+  if (!trimmed) return false;
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
 
 const receptsSlice = createSlice({
   name: "recepts",
   initialState,
   reducers: {
+    syncPendingReceiptsRequested: (state: Receipts): Receipts => state,
     addRecept: (state: Receipts, action: PayloadAction<string>): Receipts => {
-      const url = action.payload;
+      const url = normalizeUrl(action.payload);
 
-      const exists = Object.values(state).some((r) => r.url === url);
+      if (!url || !isValidUrl(url)) return state;
+
+      const exists = Object.values(state).some((r) => normalizeUrl(r.url) === url);
       if (exists) return state;
 
       const id = uniqueNumberId();
@@ -42,13 +59,14 @@ const receptsSlice = createSlice({
       };
     },
 
-    removeRecept: (state: Receipts, action: PayloadAction<number>): Receipts => {
-      const { [action.payload]: _, ...rest } = state;
+    removeRecept: (state: Receipts, action: PayloadAction<string | number>): Receipts => {
+      const id = String(action.payload);
+      const { [id]: _, ...rest } = state;
       return rest;
     },
 
-    markUploaded: (state: Receipts, action: PayloadAction<number>): Receipts => {
-      const id = action.payload;
+    markUploaded: (state: Receipts, action: PayloadAction<string | number>): Receipts => {
+      const id = String(action.payload);
       const recept = state[id];
       if (!recept) return state;
 
@@ -60,5 +78,6 @@ const receptsSlice = createSlice({
   },
 });
 
-export const { addRecept, removeRecept, markUploaded } = receptsSlice.actions;
-export default persistReducer(persistConfig, receptsSlice.reducer);
+export const { syncPendingReceiptsRequested, addRecept, removeRecept, markUploaded } = receptsSlice.actions;
+export const receptsReducer = receptsSlice.reducer;
+export default persistReducer(persistConfig, receptsReducer);
