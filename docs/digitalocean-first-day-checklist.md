@@ -149,9 +149,16 @@ Add these runtime app secrets in GitHub (used to generate backend `.env` on depl
 - `APP_PORT` (example: `4000`)
 - `APP_NODE_ENV` (example: `production`)
 - `APP_FRONTEND_URL` (example: `https://apps.example.com`)
+- `APP_FRONTEND_ORIGIN` (optional CORS override, example: `https://apps.example.com`)
 - `APP_GOOGLE_CLIENT_ID` (optional if OAuth disabled)
 - `APP_GOOGLE_CLIENT_SECRET` (optional if OAuth disabled)
 - `APP_SESSION_SECRET` (required, long random value)
+
+CORS secret note:
+
+- Set `APP_FRONTEND_ORIGIN` to the browser origin that is allowed to call `/api` (scheme + host + optional port, no path).
+- Example: if your app is served from `https://apps.doni.md/qrscanner/`, set `APP_FRONTEND_ORIGIN` to `https://apps.doni.md`.
+- If `APP_FRONTEND_ORIGIN` is not provided, deploy derives `FRONTEND_ORIGIN` from `APP_FRONTEND_URL`.
 
 Secret definitions (what value goes in each):
 
@@ -223,6 +230,7 @@ Fail-fast validation in workflow:
 
 - Deployment stops if any required secret is missing.
 - Runtime deploy secrets `APP_PORT`, `APP_NODE_ENV`, and `APP_SESSION_SECRET` are required.
+- `APP_PORT` must be `1024` or higher when deploying as a non-root user such as `deploy`.
 - `DEPLOY_PORT` must be numeric and in range `1..65535`.
 - `DEPLOY_DIR` must be an absolute Linux path (starts with `/`).
 - `DEPLOY_FRONTEND_URL` must start with `http://` or `https://`.

@@ -49,6 +49,7 @@ jobs:
           APP_PORT: ${{ secrets.APP_PORT }}
           APP_NODE_ENV: ${{ secrets.APP_NODE_ENV }}
           APP_FRONTEND_URL: ${{ secrets.APP_FRONTEND_URL }}
+          APP_FRONTEND_ORIGIN: ${{ secrets.APP_FRONTEND_ORIGIN }}
           APP_SESSION_SECRET: ${{ secrets.APP_SESSION_SECRET }}
         run: |
           set -euo pipefail
@@ -72,6 +73,16 @@ jobs:
           done
 
           if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          if ! [[ "$APP_PORT" =~ ^[0-9]+$ ]] || [ "$APP_PORT" -lt 1 ] || [ "$APP_PORT" -gt 65535 ]; then
+            echo "APP_PORT must be a valid integer between 1 and 65535"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_USER" != "root" ] && [ "$APP_PORT" -lt 1024 ]; then
+            echo "APP_PORT must be 1024 or higher when DEPLOY_USER is non-root"
             exit 1
           fi
 
@@ -151,6 +162,7 @@ jobs:
           APP_PORT: ${{ secrets.APP_PORT }}
           APP_NODE_ENV: ${{ secrets.APP_NODE_ENV }}
           APP_FRONTEND_URL: ${{ secrets.APP_FRONTEND_URL }}
+          APP_FRONTEND_ORIGIN: ${{ secrets.APP_FRONTEND_ORIGIN }}
           APP_GOOGLE_CLIENT_ID: ${{ secrets.APP_GOOGLE_CLIENT_ID }}
           APP_GOOGLE_CLIENT_SECRET: ${{ secrets.APP_GOOGLE_CLIENT_SECRET }}
           APP_SESSION_SECRET: ${{ secrets.APP_SESSION_SECRET }}
