@@ -210,9 +210,10 @@ async function deployRemote(config) {
     `${sudoPrefix}apt-get install -y nodejs`,
     `${sudoPrefix}npm install -g pm2`,
     `${sudoPrefix}rm -rf ${remoteBackendDir} ${remoteFrontendDir}`,
-    `${sudoPrefix}mkdir -p ${remoteBackendDir} ${remoteFrontendDir}`,
     `${sudoPrefix}chown -R ${config.user}:${config.user} ${remoteDir}`,
     `${sudoPrefix}chmod -R u+rwX ${remoteDir}`,
+    `mkdir -p ${remoteBackendDir} ${remoteFrontendDir}`,
+    `touch ${remoteBackendDir}/.write-test && rm -f ${remoteBackendDir}/.write-test`,
   ].join(' && ');
 
   runCommand('ssh', buildSshArgs(config, remoteBootstrap));
