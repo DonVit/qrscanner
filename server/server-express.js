@@ -247,10 +247,21 @@ function authCallbackHandler(req, res) {
   }
 
   const token = `social:${req.user.username}:${req.user.provider}`;
-  const frontend = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
-  const redirect = `${frontend}?authToken=${encodeURIComponent(token)}&username=${encodeURIComponent(
-    req.user.displayName || req.user.username
-  )}`;
+  const frontend = process.env.FRONTEND_URL || process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+  let redirect;
+
+  try {
+    const redirectUrl = new URL(frontend);
+    redirectUrl.searchParams.set('authToken', token);
+    redirectUrl.searchParams.set('username', req.user.displayName || req.user.username);
+    redirect = redirectUrl.toString();
+  } catch {
+    const separator = frontend.includes('?') ? '&' : '?';
+    redirect = `${frontend}${separator}authToken=${encodeURIComponent(token)}&username=${encodeURIComponent(
+      req.user.displayName || req.user.username
+    )}`;
+  }
+
   res.redirect(redirect);
 }
 
