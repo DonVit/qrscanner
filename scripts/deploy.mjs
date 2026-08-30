@@ -130,6 +130,20 @@ function getOrigin(value, fallback) {
   }
 }
 
+function getHostname(value, fallback) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    const parsed = new URL(raw);
+    return parsed.hostname || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function renderTemplate(templateName, replacements) {
   let template = readFileSync(path.join(templateDir, templateName), 'utf8');
 
@@ -216,7 +230,8 @@ async function deployRemote(config) {
   const frontendUrl = config.frontendUrl || `http://${config.host}`;
   const appFrontendUrl = config.appFrontendUrl || frontendUrl;
   const appFrontendOrigin = getOrigin(config.appFrontendOrigin || appFrontendUrl, frontendUrl);
-  const serverName = config.serverName || config.host;
+  const publicHost = getHostname(frontendUrl, '');
+  const serverName = publicHost || config.serverName || config.host;
   const remoteDir = normalizeRemotePath(config.deployDir || '/var/www/qrscanner');
   const remoteBackendDir = `${remoteDir}/backend`;
   const remoteFrontendDir = `${remoteDir}/frontend`;
