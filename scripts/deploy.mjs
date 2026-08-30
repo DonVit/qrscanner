@@ -1,5 +1,5 @@
 import { mkdir, cp, rm, writeFile, access } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, execSync } from 'node:child_process';
@@ -13,6 +13,7 @@ const backendDir = path.join(deployDir, 'backend');
 const frontendDir = path.join(deployDir, 'frontend');
 const dbFile = path.join(projectRoot, 'server', 'data', 'receipts.sqlite');
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+const templateDir = path.join(projectRoot, 'scripts', 'templates');
 
 function parseArgs(argv) {
   const options = {
@@ -129,67 +130,14 @@ function getOrigin(value, fallback) {
   }
 }
 
-function buildNginxConfig({ serverName, remoteFrontendDir, certDir, https }) {
-  const appLocations = [
-    '  location = / {',
-    '    return 301 /qrscanner/;',
-    '  }',
-    '',
-    '  location /qrscanner/assets/ {',
-    `    alias ${remoteFrontendDir}/assets/;`,
-    '    try_files $request_filename =404;',
-    '    access_log off;',
-    '    expires 1y;',
-    '    add_header Cache-Control "public, immutable";',
-    '  }',
-    '',
-    '  location /qrscanner/ {',
-    `    alias ${remoteFrontendDir}/;`,
-    '    try_files $request_filename $request_filename/ /qrscanner/index.html;',
-    '  }',
-    '',
-    '  location /api/ {',
-    '    proxy_pass http://127.0.0.1:4000;',
-    '    proxy_http_version 1.1;',
-    '    proxy_set_header Host $host;',
-    '    proxy_set_header X-Real-IP $remote_addr;',
-    '    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
-    '    proxy_set_header X-Forwarded-Proto $scheme;',
-    '  }',
-  ].join('\n');
+function renderTemplate(templateName, replacements) {
+  let template = readFileSync(path.join(templateDir, templateName), 'utf8');
 
-  if (!https) {
-    return [
-      'server {',
-      '  listen 80;',
-      `  server_name ${serverName};`,
-      '',
-      appLocations,
-      '}',
-      '',
-    ].join('\n');
+  for (const [key, value] of Object.entries(replacements)) {
+    template = template.replaceAll(`{{${key}}}`, value);
   }
 
-  return [
-    'server {',
-    '  listen 80;',
-    `  server_name ${serverName};`,
-    '  return 301 https://$host$request_uri;',
-    '}',
-    '',
-    'server {',
-    '  listen 443 ssl;',
-    `  server_name ${serverName};`,
-    '',
-    `  ssl_certificate ${certDir}/fullchain.pem;`,
-    `  ssl_certificate_key ${certDir}/privkey.pem;`,
-    '  include /etc/letsencrypt/options-ssl-nginx.conf;',
-    '  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;',
-    '',
-    appLocations,
-    '}',
-    '',
-  ].join('\n');
+  return template;
 }
 
 async function ensurePath(dir) {
@@ -268,13 +216,18 @@ async function deployRemote(config) {
   const frontendUrl = config.frontendUrl || `http://${config.host}`;
   const appFrontendUrl = config.appFrontendUrl || frontendUrl;
   const appFrontendOrigin = getOrigin(config.appFrontendOrigin || appFrontendUrl, frontendUrl);
+  const useHttps = frontendUrl.startsWith('https://');
   const serverName = config.serverName || config.host;
   const remoteDir = normalizeRemotePath(config.deployDir || '/var/www/qrscanner');
   const remoteBackendDir = `${remoteDir}/backend`;
   const remoteFrontendDir = `${remoteDir}/frontend`;
   const certDir = `/etc/letsencrypt/live/${serverName}`;
-  const httpNginxConfig = buildNginxConfig({ serverName, remoteFrontendDir, certDir, https: false });
-  const httpsNginxConfig = buildNginxConfig({ serverName, remoteFrontendDir, certDir, https: true });
+  const templateReplacements = {
+    SERVER_NAME: serverName,
+    REMOTE_FRONTEND_DIR: remoteFrontendDir,
+    CERT_DIR: certDir,
+  };
+  const nginxConfig = renderTemplate(useHttps ? 'nginx-https.conf' : 'nginx-http.conf', templateReplacements);
   const isRootUser = config.user === 'root';
   const sudoPrefix = isRootUser ? '' : 'sudo -n ';
   const useSudo = !isRootUser;
@@ -336,7 +289,7 @@ async function deployRemote(config) {
     `pm2 delete qrscanner >/dev/null 2>&1 || true`,
     `pm2 start server/server-express.js --name qrscanner --cwd ${remoteBackendDir}`,
     `pm2 save`,
-    `if [ -f ${certDir}/fullchain.pem ] && [ -f ${certDir}/privkey.pem ]; then printf '%s' ${shellSingleQuote(httpsNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; else printf '%s' ${shellSingleQuote(httpNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; fi`,
+    `printf '%s' ${shellSingleQuote(nginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null`,
     `${useSudo ? 'sudo ' : ''}ln -sf /etc/nginx/sites-available/qrscanner /etc/nginx/sites-enabled/qrscanner`,
     `if command -v systemctl >/dev/null 2>&1; then ${useSudo ? 'sudo ' : ''}systemctl reload nginx || ${useSudo ? 'sudo ' : ''}systemctl restart nginx; else ${useSudo ? 'sudo ' : ''}service nginx reload || ${useSudo ? 'sudo ' : ''}service nginx restart; fi`,
   ].join(' && ');
