@@ -24,6 +24,12 @@ function parseArgs(argv) {
     sshKey: process.env.DEPLOY_SSH_KEY || '',
     serverName: process.env.DEPLOY_SERVER_NAME || '',
     frontendUrl: process.env.DEPLOY_FRONTEND_URL || '',
+    appPort: process.env.APP_PORT || '4000',
+    appNodeEnv: process.env.APP_NODE_ENV || 'production',
+    appFrontendUrl: process.env.APP_FRONTEND_URL || process.env.DEPLOY_FRONTEND_URL || '',
+    appGoogleClientId: process.env.APP_GOOGLE_CLIENT_ID || '',
+    appGoogleClientSecret: process.env.APP_GOOGLE_CLIENT_SECRET || '',
+    appSessionSecret: process.env.APP_SESSION_SECRET || 'change-me',
     skipInstall: false,
   };
 
@@ -94,6 +100,10 @@ function normalizeRemotePath(value) {
   }
 
   return normalized;
+}
+
+function shellSingleQuote(value) {
+  return `'${String(value).replace(/'/g, `'"'"'`)}'`;
 }
 
 function runCommand(command, args, options = {}) {
@@ -180,6 +190,7 @@ async function deployRemote(config) {
   }
 
   const frontendUrl = config.frontendUrl || `http://${config.host}`;
+  const appFrontendUrl = config.appFrontendUrl || frontendUrl;
   const serverName = config.serverName || config.host;
   const remoteDir = normalizeRemotePath(config.deployDir || '/var/www/qrscanner');
   const remoteBackendDir = `${remoteDir}/backend`;
@@ -241,7 +252,7 @@ async function deployRemote(config) {
     `if [ -f ${remoteBackendDir}/server/data/receipts.sqlite ]; then cp ${remoteBackendDir}/server/data/receipts.sqlite ${remoteBackendDir}/server/data/backups/receipts-$(date +%Y%m%d%H%M%S).sqlite; fi`,
     `cd ${remoteBackendDir}`,
     `npm install --omit=dev --no-audit`,
-    `printf '%s\n' 'PORT=4000' 'NODE_ENV=production' 'FRONTEND_URL=${frontendUrl}' 'GOOGLE_CLIENT_ID=' 'GOOGLE_CLIENT_SECRET=' 'SESSION_SECRET=change-me' > .env`,
+    `printf '%s\\n' ${shellSingleQuote(`PORT=${config.appPort}`)} ${shellSingleQuote(`NODE_ENV=${config.appNodeEnv}`)} ${shellSingleQuote(`FRONTEND_URL=${appFrontendUrl}`)} ${shellSingleQuote(`GOOGLE_CLIENT_ID=${config.appGoogleClientId}`)} ${shellSingleQuote(`GOOGLE_CLIENT_SECRET=${config.appGoogleClientSecret}`)} ${shellSingleQuote(`SESSION_SECRET=${config.appSessionSecret}`)} > .env`,
     `pm2 delete qrscanner >/dev/null 2>&1 || true`,
     `pm2 start server/server-express.js --name qrscanner --cwd ${remoteBackendDir}`,
     `pm2 save`,
