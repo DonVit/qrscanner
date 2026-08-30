@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -81,21 +81,45 @@ jobs:
           fi
 
           if ! [[ "$DEPLOY_SERVER_NAME" =~ ^[A-Za-z0-9.-]+$ ]]; then
-            echo "DEPLOY_SERVER_NAME contains unsupported characters"
-            exit 1
+            # Allow common accidental formats (scheme/path) and normalize below.
+            true
           fi
 
-          FRONTEND_HOST="$(printf '%s' "$DEPLOY_FRONTEND_URL" | sed -E 's#^https?://([^/:]+).*$#\1#')"
+          normalize_host() {
+            local input="$1"
+            input="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]')"
+            input="${input#http://}"
+            input="${input#https://}"
+            input="${input%%/*}"
+            input="${input%%:*}"
+            input="${input%.}"
+            # trim surrounding whitespace
+            input="$(printf '%s' "$input" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+            printf '%s' "$input"
+          }
+
+          FRONTEND_HOST="$(normalize_host "$DEPLOY_FRONTEND_URL")"
+          SERVER_NAME_HOST="$(normalize_host "$DEPLOY_SERVER_NAME")"
           FRONTEND_SCHEME="$(printf '%s' "$DEPLOY_FRONTEND_URL" | sed -E 's#^(https?)://.*$#\1#')"
 
-          if [ "$FRONTEND_HOST" != "$DEPLOY_SERVER_NAME" ]; then
-            echo "DEPLOY_FRONTEND_URL host must exactly match DEPLOY_SERVER_NAME"
-            echo "Current host: $FRONTEND_HOST"
-            echo "Expected host: $DEPLOY_SERVER_NAME"
+          if [ -z "$SERVER_NAME_HOST" ]; then
+            echo "DEPLOY_SERVER_NAME is invalid after normalization; use a host like apps.doni.com"
             exit 1
           fi
 
-          if [ "$DEPLOY_SERVER_NAME" != "$DEPLOY_HOST" ] && [ "$FRONTEND_SCHEME" != "https" ]; then
+          if ! [[ "$SERVER_NAME_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
+            echo "DEPLOY_SERVER_NAME host is invalid; expected letters, digits, dots, and hyphens only"
+            exit 1
+          fi
+
+          if [ "$FRONTEND_HOST" != "$SERVER_NAME_HOST" ]; then
+            echo "DEPLOY_FRONTEND_URL host must exactly match DEPLOY_SERVER_NAME"
+            echo "Current host: $FRONTEND_HOST"
+            echo "Expected host: $SERVER_NAME_HOST"
+            exit 1
+          fi
+
+          if [ "$SERVER_NAME_HOST" != "$DEPLOY_HOST" ] && [ "$FRONTEND_SCHEME" != "https" ]; then
             echo "When DEPLOY_SERVER_NAME is a domain, DEPLOY_FRONTEND_URL must use https://"
             exit 1
           fi

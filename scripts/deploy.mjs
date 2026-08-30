@@ -184,22 +184,33 @@ async function deployRemote(config) {
   const remoteDir = normalizeRemotePath(config.deployDir || '/var/www/qrscanner');
   const remoteBackendDir = `${remoteDir}/backend`;
   const remoteFrontendDir = `${remoteDir}/frontend`;
-  const sudoPrefix = config.user === 'root' ? '' : 'sudo ';
-  const useSudo = config.user !== 'root';
+  const isRootUser = config.user === 'root';
+  const sudoPrefix = isRootUser ? '' : 'sudo -n ';
+  const useSudo = !isRootUser;
 
   console.log(`Deploying to ${config.user}@${config.host}:${remoteDir}`);
 
+  if (useSudo) {
+    try {
+      runCommand('ssh', buildSshArgs(config, 'sudo -n true'));
+    } catch {
+      throw new Error(
+        `Remote user "${config.user}" requires passwordless sudo for CI deployments. ` +
+        'Configure NOPASSWD in /etc/sudoers.d and re-run deployment.'
+      );
+    }
+  }
+
   const remoteBootstrap = [
-    `id -u ${config.user} >/dev/null 2>&1 || useradd -m -s /bin/bash ${config.user}`,
-    `if ! id -nG ${config.user} | grep -qw sudo; then mkdir -p /etc/sudoers.d && echo "${config.user} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${config.user} && chmod 0440 /etc/sudoers.d/${config.user}; fi`,
-    `${useSudo ? sudoPrefix : ''}mkdir -p ${remoteDir}`,
-    `${useSudo ? sudoPrefix : ''}apt-get update`,
-    `${useSudo ? sudoPrefix : ''}apt-get install -y nginx curl ca-certificates gnupg`,
-    `curl -fsSL https://deb.nodesource.com/setup_20.x | ${useSudo ? sudoPrefix : ''}bash -`,
-    `${useSudo ? sudoPrefix : ''}apt-get install -y nodejs`,
-    `${useSudo ? sudoPrefix : ''}npm install -g pm2`,
+    `${sudoPrefix}mkdir -p ${remoteDir}`,
+    `${sudoPrefix}chown -R ${config.user}:${config.user} ${remoteDir}`,
+    `${sudoPrefix}apt-get update`,
+    `${sudoPrefix}apt-get install -y nginx curl ca-certificates gnupg`,
+    `curl -fsSL https://deb.nodesource.com/setup_20.x | ${sudoPrefix}bash -`,
+    `${sudoPrefix}apt-get install -y nodejs`,
+    `${sudoPrefix}npm install -g pm2`,
     `rm -rf ${remoteBackendDir} ${remoteFrontendDir}`,
-    `${useSudo ? sudoPrefix : ''}mkdir -p ${remoteBackendDir} ${remoteFrontendDir}`,
+    `mkdir -p ${remoteBackendDir} ${remoteFrontendDir}`,
   ].join(' && ');
 
   runCommand('ssh', buildSshArgs(config, remoteBootstrap));
