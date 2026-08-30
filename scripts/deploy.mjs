@@ -129,6 +129,69 @@ function getOrigin(value, fallback) {
   }
 }
 
+function buildNginxConfig({ serverName, remoteFrontendDir, certDir, https }) {
+  const appLocations = [
+    '  location = / {',
+    '    return 301 /qrscanner/;',
+    '  }',
+    '',
+    '  location /qrscanner/assets/ {',
+    `    alias ${remoteFrontendDir}/assets/;`,
+    '    try_files $request_filename =404;',
+    '    access_log off;',
+    '    expires 1y;',
+    '    add_header Cache-Control "public, immutable";',
+    '  }',
+    '',
+    '  location /qrscanner/ {',
+    `    alias ${remoteFrontendDir}/;`,
+    '    try_files $request_filename $request_filename/ /qrscanner/index.html;',
+    '  }',
+    '',
+    '  location /api/ {',
+    '    proxy_pass http://127.0.0.1:4000;',
+    '    proxy_http_version 1.1;',
+    '    proxy_set_header Host $host;',
+    '    proxy_set_header X-Real-IP $remote_addr;',
+    '    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
+    '    proxy_set_header X-Forwarded-Proto $scheme;',
+    '  }',
+  ].join('\n');
+
+  if (!https) {
+    return [
+      'server {',
+      '  listen 80;',
+      `  server_name ${serverName};`,
+      '',
+      appLocations,
+      '}',
+      '',
+    ].join('\n');
+  }
+
+  return [
+    'server {',
+    '  listen 80;',
+    `  server_name ${serverName};`,
+    '  return 301 https://$host$request_uri;',
+    '}',
+    '',
+    'server {',
+    '  listen 443 ssl;',
+    `  server_name ${serverName};`,
+    '',
+    `  ssl_certificate ${certDir}/fullchain.pem;`,
+    `  ssl_certificate_key ${certDir}/privkey.pem;`,
+    '  include /etc/letsencrypt/options-ssl-nginx.conf;',
+    '  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;',
+    '',
+    appLocations,
+    '}',
+    '',
+  ].join('\n');
+}
+
 async function ensurePath(dir) {
   await mkdir(dir, { recursive: true });
 }
@@ -210,6 +273,8 @@ async function deployRemote(config) {
   const remoteBackendDir = `${remoteDir}/backend`;
   const remoteFrontendDir = `${remoteDir}/frontend`;
   const certDir = `/etc/letsencrypt/live/${serverName}`;
+  const httpNginxConfig = buildNginxConfig({ serverName, remoteFrontendDir, certDir, https: false });
+  const httpsNginxConfig = buildNginxConfig({ serverName, remoteFrontendDir, certDir, https: true });
   const isRootUser = config.user === 'root';
   const sudoPrefix = isRootUser ? '' : 'sudo -n ';
   const useSudo = !isRootUser;
@@ -271,7 +336,7 @@ async function deployRemote(config) {
     `pm2 delete qrscanner >/dev/null 2>&1 || true`,
     `pm2 start server/server-express.js --name qrscanner --cwd ${remoteBackendDir}`,
     `pm2 save`,
-    `if [ -f ${certDir}/fullchain.pem ] && [ -f ${certDir}/privkey.pem ]; then ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null <<'EOF'\nserver {\n  listen 80;\n  server_name ${serverName};\n  return 301 https://$host$request_uri;\n}\n\nserver {\n  listen 443 ssl;\n  server_name ${serverName};\n\n  ssl_certificate ${certDir}/fullchain.pem;\n  ssl_certificate_key ${certDir}/privkey.pem;\n  include /etc/letsencrypt/options-ssl-nginx.conf;\n  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;\n\n  location = / {\n    return 301 /qrscanner/;\n  }\n\n  location /qrscanner/assets/ {\n    alias ${remoteFrontendDir}/assets/;\n    try_files $request_filename =404;\n    access_log off;\n    expires 1y;\n    add_header Cache-Control \"public, immutable\";\n  }\n\n  location /qrscanner/ {\n    alias ${remoteFrontendDir}/;\n    try_files $request_filename $request_filename/ /qrscanner/index.html;\n  }\n\n  location /api/ {\n    proxy_pass http://127.0.0.1:4000;\n    proxy_http_version 1.1;\n    proxy_set_header Host $host;\n    proxy_set_header X-Real-IP $remote_addr;\n    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n    proxy_set_header X-Forwarded-Proto $scheme;\n  }\n}\nEOF; else ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null <<'EOF'\nserver {\n  listen 80;\n  server_name ${serverName};\n\n  location = / {\n    return 301 /qrscanner/;\n  }\n\n  location /qrscanner/assets/ {\n    alias ${remoteFrontendDir}/assets/;\n    try_files $request_filename =404;\n    access_log off;\n    expires 1y;\n    add_header Cache-Control \"public, immutable\";\n  }\n\n  location /qrscanner/ {\n    alias ${remoteFrontendDir}/;\n    try_files $request_filename $request_filename/ /qrscanner/index.html;\n  }\n\n  location /api/ {\n    proxy_pass http://127.0.0.1:4000;\n    proxy_http_version 1.1;\n    proxy_set_header Host $host;\n    proxy_set_header X-Real-IP $remote_addr;\n    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n    proxy_set_header X-Forwarded-Proto $scheme;\n  }\n}\nEOF; fi`,
+    `if [ -f ${certDir}/fullchain.pem ] && [ -f ${certDir}/privkey.pem ]; then printf '%s' ${shellSingleQuote(httpsNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; else printf '%s' ${shellSingleQuote(httpNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; fi`,
     `${useSudo ? 'sudo ' : ''}ln -sf /etc/nginx/sites-available/qrscanner /etc/nginx/sites-enabled/qrscanner`,
     `if command -v systemctl >/dev/null 2>&1; then ${useSudo ? 'sudo ' : ''}systemctl reload nginx || ${useSudo ? 'sudo ' : ''}systemctl restart nginx; else ${useSudo ? 'sudo ' : ''}service nginx reload || ${useSudo ? 'sudo ' : ''}service nginx restart; fi`,
   ].join(' && ');
