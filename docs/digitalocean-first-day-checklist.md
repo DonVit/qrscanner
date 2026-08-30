@@ -38,7 +38,7 @@ Set these values:
 Reload SSH:
 
 ```bash
-systemctl reload sshd
+systemctl reload ssh || systemctl restart ssh
 ```
 
 Firewall:
@@ -159,7 +159,22 @@ Secret definitions (what value goes in each):
 -----END OPENSSH PRIVATE KEY-----
 ```
 
+Important key pairing rule:
+
+- Put the private key in GitHub secret `DEPLOY_SSH_KEY`.
+- Put the matching public key on the Droplet in `~/.ssh/authorized_keys` for `DEPLOY_USER`.
+- Do not store the public key in `DEPLOY_SSH_KEY`.
+
+Troubleshooting note (`Permission denied (publickey)`):
+
+- If `ssh-copy-id` to `root` fails and `PermitRootLogin no` is set, this is expected.
+- Add your public key to the `deploy` user instead, then connect as `deploy`.
+- If needed, use the DigitalOcean web console once to create `/home/deploy/.ssh/authorized_keys` and set permissions:
+  - `/home/deploy/.ssh` -> `700`
+  - `/home/deploy/.ssh/authorized_keys` -> `600`
+
 - `DEPLOY_SERVER_NAME`: Domain or host used in nginx server_name. Example: `apps.example.com`
+  - Use host only (no `http://`, no `https://`, no path, no trailing slash).
 - `DEPLOY_FRONTEND_URL`: Public frontend base URL used by backend config. Example: `https://apps.example.com`
 
 Recommended alignment:
@@ -173,6 +188,19 @@ Set secrets in GitHub:
 2. Click New repository secret.
 3. Add each secret value.
 4. For `DEPLOY_SSH_KEY`, paste the full private key text including begin/end lines.
+
+One-time server requirement for CI deploy user:
+
+- GitHub Actions is non-interactive, so `DEPLOY_USER` must have passwordless sudo.
+- On the Droplet (as root), run:
+
+```bash
+echo 'deploy ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/deploy
+chmod 0440 /etc/sudoers.d/deploy
+visudo -cf /etc/sudoers.d/deploy
+```
+
+- Replace `deploy` with your actual `DEPLOY_USER` if different.
 
 Trigger deployment:
 
@@ -190,6 +218,10 @@ Fail-fast validation in workflow:
 - `DEPLOY_FRONTEND_URL` must start with `http://` or `https://`.
 - Host in `DEPLOY_FRONTEND_URL` must exactly match `DEPLOY_SERVER_NAME`.
 - If `DEPLOY_SERVER_NAME` is a domain (not raw IP host), `DEPLOY_FRONTEND_URL` must use `https://`.
+
+CI runtime note:
+
+- GitHub Actions workflow uses Node.js 24 for build steps.
 
 ## 9) Configure HTTPS (After HTTP Works)
 
