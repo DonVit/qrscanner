@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser";
-import { SwitchCamera, ScanQrCode, QrCode } from "lucide-react";
+import { Link, SwitchCamera } from "lucide-react";
 import { useDispatch } from "react-redux";
-import { addRecept } from "../../slices/receptsSlice";
-import { scnnerOff } from "../../slices/scannerMenuSlice";
+import { addRecept, isValidUrl, normalizeUrl } from "../../slices/receptsSlice";
 
 export default function QRScanner() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -14,6 +13,9 @@ export default function QRScanner() {
   const controlsRef = useRef<IScannerControls | null>(null);
   const dispatch = useDispatch();
   const [urls, setUrls] = useState(() => new Map());
+  const [isManualUrlFormOpen, setIsManualUrlFormOpen] = useState(false);
+  const [manualUrl, setManualUrl] = useState("");
+  const [manualUrlError, setManualUrlError] = useState("");
 
   const addUrl = (key: any, value: any) => {
     setUrls((prevMap) => {
@@ -95,6 +97,23 @@ export default function QRScanner() {
     startScanning(nextDeviceId);
   }
 
+  function handleManualUrlSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const url = normalizeUrl(manualUrl);
+    if (!isValidUrl(url)) {
+      setManualUrlError("Enter a valid http:// or https:// URL.");
+      return;
+    }
+
+    dispatch(addRecept(url));
+    addUrl(url, url);
+    setResult(url);
+    setManualUrl("");
+    setManualUrlError("");
+    setIsManualUrlFormOpen(false);
+  }
+
   return (
     <div>
       <div>
@@ -106,8 +125,28 @@ export default function QRScanner() {
         />
       </div>
       <div className="flex">
-        <button onClick={handleDeviceChange} aria-label="Switch Camera">
+        <button
+          onClick={handleDeviceChange}
+          aria-label="Switch Camera"
+          className="p-0.5"
+        >
           <SwitchCamera
+            size={16}
+            className="w-6 h-6 text-red-500 hover:text-red-700"
+          />
+        </button>
+        <button
+          onClick={() => {
+            setIsManualUrlFormOpen((isOpen) => !isOpen);
+            setManualUrlError("");
+          }}
+          className="p-0.5"
+          aria-label="Add URL manually"
+          title="Add URL manually"
+          aria-expanded={isManualUrlFormOpen}
+          aria-controls="manual-url-form"
+        >
+          <Link
             size={16}
             className="w-6 h-6 text-red-500 hover:text-red-700"
           />
@@ -117,6 +156,41 @@ export default function QRScanner() {
           <strong>Result:</strong> {result || "No code detected yet"}
         </p>
       </div>
+      {isManualUrlFormOpen && (
+        <form
+          id="manual-url-form"
+          onSubmit={handleManualUrlSubmit}
+          className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap"
+        >
+          <label htmlFor="manual-url" className="sr-only">
+            Receipt URL
+          </label>
+          <input
+            id="manual-url"
+            type="url"
+            value={manualUrl}
+            onChange={(event) => {
+              setManualUrl(event.target.value);
+              setManualUrlError("");
+            }}
+            placeholder="https://example.com/receipt"
+            className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+            autoFocus
+            required
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
+          >
+            Add URL
+          </button>
+          {manualUrlError && (
+            <p className="text-sm text-red-600 sm:basis-full" role="alert">
+              {manualUrlError}
+            </p>
+          )}
+        </form>
+      )}
     </div>
   );
 }
