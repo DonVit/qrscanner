@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { Users, ReceiptText, CheckCircle2 } from "lucide-react";
+import { selectTotalScans, selectUniqueScans } from "../../selectors/receptsSelectors";
 
 const STATS_URL = "/api/stats";
 
@@ -20,6 +21,8 @@ function StatCard({ title, value, icon: Icon, accent }) {
 
 export default function StatsPage() {
   const auth = useSelector((state) => state.auth);
+  const totalScans = useSelector(selectTotalScans);
+  const uniqueScans = useSelector(selectUniqueScans);
   const [stats, setStats] = useState({ users: 0, uploadedReceipts: 0, totalReceipts: 0, userBreakdown: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -80,7 +83,19 @@ export default function StatsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-5">
+            <StatCard
+              title="Total scans (device)"
+              value={totalScans}
+              icon={ReceiptText}
+              accent="bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200"
+            />
+            <StatCard
+              title="Unique URLs (device)"
+              value={uniqueScans}
+              icon={ReceiptText}
+              accent="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-200"
+            />
             <StatCard
               title="Users"
               value={stats.users}

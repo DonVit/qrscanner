@@ -7,6 +7,7 @@ import Header from "./components/Header/Header";
 import StatsPage from "./components/Stats/StatsPage";
 import { List, ScanQrCode, CloudUpload } from "lucide-react";
 import { selectScannerMenu } from "./selectors/scannerMenuSelectors";
+import { selectPendingCount, selectTotalScans, selectUniqueScans, selectUploadedCount } from "./selectors/receptsSelectors";
 import { setScannerMenu } from "./slices/scannerMenuSlice";
 import { syncPendingReceiptsRequested } from "./slices/receptsSlice";
 
@@ -14,16 +15,12 @@ function App() {
   const scannerMenu = useSelector(selectScannerMenu);
   const saveStatus = useSelector((state) => state.saveStatus);
   const auth = useSelector((state) => state.auth);
-  const receipts = useSelector((state) => state.recepts);
+  const uploadedCount = useSelector(selectUploadedCount);
+  const pendingCount = useSelector(selectPendingCount);
+  const totalScans = useSelector(selectTotalScans);
+  const uniqueScans = useSelector(selectUniqueScans);
   const dispatch = useDispatch();
   const [showStats, setShowStats] = useState(window.location.hash === "#stats");
-
-  const receiptEntries = Object.entries(receipts || {})
-    .filter(([key]) => key !== "_persist")
-    .map(([, receipt]) => receipt)
-    .filter((receipt) => receipt && typeof receipt === "object");
-  const uploadedCount = receiptEntries.filter((receipt) => receipt?.uploaded).length;
-  const pendingCount = receiptEntries.length - uploadedCount;
 
   const handleScanModeButton = () => dispatch(setScannerMenu(!scannerMenu));
   const handleSyncReceipts = () => dispatch(syncPendingReceiptsRequested());
@@ -73,6 +70,12 @@ function App() {
             </div>
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
               Pending: {pendingCount}
+            </div>
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+              Total scans: {totalScans}
+            </div>
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200">
+              Unique URLs: {uniqueScans}
             </div>
             {shouldShowSaveStatus && (
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">

@@ -12,7 +12,7 @@ export const selectReceptsState1 = (state: RootState): Receipts => state.recepts
 // )
 
 export const selectReceptsState = createSelector(
-  (state: { recepts: Receipts }) => state.recepts,
+  (state: RootState) => state.recepts,
   (recepts) =>
     Object.values(recepts)
       .filter((r): r is Recept => typeof r === "object" && "id" in r)
@@ -21,4 +21,29 @@ export const selectReceptsState = createSelector(
         const bTime = Date.parse(b.createdAt);
         return bTime - aTime;
       })
+);
+
+export const selectUploadedCount = createSelector(
+  [selectReceptsState],
+  (recepts) => recepts.filter((receipt) => Boolean(receipt?.uploaded)).length
+);
+
+export const selectTotalScans = createSelector(
+  [selectReceptsState],
+  (recepts) => recepts.length
+);
+
+export const selectPendingCount = createSelector(
+  [selectTotalScans, selectUploadedCount],
+  (totalScans, uploadedCount) => totalScans - uploadedCount
+);
+
+export const selectUniqueScans = createSelector(
+  [selectReceptsState],
+  (recepts) =>
+    new Set(
+      recepts
+        .map((receipt) => String(receipt?.url ?? '').trim())
+        .filter(Boolean)
+    ).size
 );
