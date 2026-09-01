@@ -207,8 +207,7 @@ async function prepareDeployment() {
 
   const backendDataDir = path.join(backendDir, 'server', 'data');
   // Never ship runtime DB artifacts in deploy payload; keep production data on the server.
-  await rm(path.join(backendDataDir, 'receipts.sqlite'), { force: true });
-  await rm(path.join(backendDataDir, 'backups'), { recursive: true, force: true });
+  await rm(backendDataDir, { recursive: true, force: true });
   await ensurePath(backendDataDir);
 
   const manifest = {
@@ -237,6 +236,9 @@ async function deployRemote(config) {
   const remoteDir = normalizeRemotePath(config.deployDir || '/var/www/qrscanner');
   const remoteBackendDir = `${remoteDir}/backend`;
   const remoteFrontendDir = `${remoteDir}/frontend`;
+  const remoteDbFile = `${remoteBackendDir}/server/data/receipts.sqlite`;
+  const remoteDbBackupFile = `${remoteDir}/receipts.sqlite.predeploy`;
+  const remoteDbExpectedFlag = `${remoteDir}/.db-predeploy-existed`;
   const certDir = `/etc/letsencrypt/live/${serverName}`;
   const templateReplacements = {
     SERVER_NAME: serverName,
@@ -270,6 +272,7 @@ async function deployRemote(config) {
     `curl -fsSL https://deb.nodesource.com/setup_20.x | ${sudoPrefix}bash -`,
     `${sudoPrefix}apt-get install -y nodejs`,
     `${sudoPrefix}npm install -g pm2`,
+    `if [ -f ${remoteDbFile} ]; then cp ${remoteDbFile} ${remoteDbBackupFile} && echo 1 > ${remoteDbExpectedFlag}; else echo 0 > ${remoteDbExpectedFlag}; fi`,
     `${sudoPrefix}rm -rf ${remoteBackendDir} ${remoteFrontendDir}`,
     `${sudoPrefix}chown -R ${config.user}:${config.user} ${remoteDir}`,
     `${sudoPrefix}chmod -R u+rwX ${remoteDir}`,
@@ -299,6 +302,8 @@ async function deployRemote(config) {
 
   const remoteSetup = [
     `mkdir -p ${remoteBackendDir}/server/data/backups`,
+    `if [ -f ${remoteDbBackupFile} ]; then cp ${remoteDbBackupFile} ${remoteDbFile}; fi`,
+    `if [ "$(cat ${remoteDbExpectedFlag} 2>/dev/null || echo 0)" = "1" ] && [ ! -f ${remoteDbFile} ]; then echo 'ERROR: Existing DB was expected but restore failed. Aborting deploy to prevent data loss.'; exit 1; fi`,
     `if [ -f ${remoteBackendDir}/server/data/receipts.sqlite ]; then cp ${remoteBackendDir}/server/data/receipts.sqlite ${remoteBackendDir}/server/data/backups/receipts-$(date +%Y%m%d%H%M%S).sqlite; fi`,
     `cd ${remoteBackendDir}`,
     `npm install --omit=dev --no-audit`,
@@ -306,6 +311,8 @@ async function deployRemote(config) {
     `pm2 delete qrscanner >/dev/null 2>&1 || true`,
     `pm2 start server/server-express.js --name qrscanner --cwd ${remoteBackendDir}`,
     `pm2 save`,
+    `rm -f ${remoteDbBackupFile}`,
+    `rm -f ${remoteDbExpectedFlag}`,
     `if ${useSudo ? 'sudo ' : ''}test -f ${certDir}/fullchain.pem && ${useSudo ? 'sudo ' : ''}test -f ${certDir}/privkey.pem; then printf '%s' ${shellSingleQuote(httpsNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; else printf '%s' ${shellSingleQuote(httpNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; fi`,
     `${useSudo ? 'sudo ' : ''}ln -sf /etc/nginx/sites-available/qrscanner /etc/nginx/sites-enabled/qrscanner`,
     `if command -v systemctl >/dev/null 2>&1; then ${useSudo ? 'sudo ' : ''}systemctl reload nginx || ${useSudo ? 'sudo ' : ''}systemctl restart nginx; else ${useSudo ? 'sudo ' : ''}service nginx reload || ${useSudo ? 'sudo ' : ''}service nginx restart; fi`,
