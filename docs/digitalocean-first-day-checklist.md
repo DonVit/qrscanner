@@ -264,7 +264,8 @@ curl https://yourdomain.com/health
 
 ## 11) Backups and Restore Drill
 
-- This repo already creates timestamped SQLite backups during deploy.
+- This repo creates timestamped SQLite backups during deploy.
+- Deploy payload excludes `server/data/receipts.sqlite` and `server/data/backups` so production data is not overwritten by CI artifacts.
 - Keep periodic Droplet snapshots.
 - Test restore once:
   - stop the app
