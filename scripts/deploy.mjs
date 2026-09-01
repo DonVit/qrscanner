@@ -206,10 +206,10 @@ async function prepareDeployment() {
   }
 
   const backendDataDir = path.join(backendDir, 'server', 'data');
+  // Never ship runtime DB artifacts in deploy payload; keep production data on the server.
+  await rm(path.join(backendDataDir, 'receipts.sqlite'), { force: true });
+  await rm(path.join(backendDataDir, 'backups'), { recursive: true, force: true });
   await ensurePath(backendDataDir);
-  if (existsSync(dbFile)) {
-    await cp(dbFile, path.join(backendDataDir, 'receipts.sqlite'));
-  }
 
   const manifest = {
     createdAt: new Date().toISOString(),
