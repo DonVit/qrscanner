@@ -311,6 +311,14 @@ app.get('/api/stats', async (req, res) => {
   });
 });
 
+app.get('/api/public/urls', (req, res) => {
+  const urls = readReceipts(null)
+    .map((receipt) => String(receipt.url || '').trim())
+    .filter(Boolean);
+
+  res.json({ urls });
+});
+
 app.post('/api/receipts', ensureAuth, async (req, res) => {
   try {
     const payload = req.body || {};
