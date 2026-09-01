@@ -237,6 +237,8 @@ async function deployRemote(config) {
   const remoteDir = normalizeRemotePath(config.deployDir || '/var/www/qrscanner');
   const remoteBackendDir = `${remoteDir}/backend`;
   const remoteFrontendDir = `${remoteDir}/frontend`;
+  const remoteDbFile = `${remoteBackendDir}/server/data/receipts.sqlite`;
+  const remoteDbBackupFile = `${remoteDir}/receipts.sqlite.predeploy`;
   const certDir = `/etc/letsencrypt/live/${serverName}`;
   const templateReplacements = {
     SERVER_NAME: serverName,
@@ -270,6 +272,7 @@ async function deployRemote(config) {
     `curl -fsSL https://deb.nodesource.com/setup_20.x | ${sudoPrefix}bash -`,
     `${sudoPrefix}apt-get install -y nodejs`,
     `${sudoPrefix}npm install -g pm2`,
+    `if [ -f ${remoteDbFile} ]; then cp ${remoteDbFile} ${remoteDbBackupFile}; fi`,
     `${sudoPrefix}rm -rf ${remoteBackendDir} ${remoteFrontendDir}`,
     `${sudoPrefix}chown -R ${config.user}:${config.user} ${remoteDir}`,
     `${sudoPrefix}chmod -R u+rwX ${remoteDir}`,
@@ -299,6 +302,7 @@ async function deployRemote(config) {
 
   const remoteSetup = [
     `mkdir -p ${remoteBackendDir}/server/data/backups`,
+    `if [ -f ${remoteDbBackupFile} ]; then cp ${remoteDbBackupFile} ${remoteDbFile}; fi`,
     `if [ -f ${remoteBackendDir}/server/data/receipts.sqlite ]; then cp ${remoteBackendDir}/server/data/receipts.sqlite ${remoteBackendDir}/server/data/backups/receipts-$(date +%Y%m%d%H%M%S).sqlite; fi`,
     `cd ${remoteBackendDir}`,
     `npm install --omit=dev --no-audit`,
@@ -306,6 +310,7 @@ async function deployRemote(config) {
     `pm2 delete qrscanner >/dev/null 2>&1 || true`,
     `pm2 start server/server-express.js --name qrscanner --cwd ${remoteBackendDir}`,
     `pm2 save`,
+    `rm -f ${remoteDbBackupFile}`,
     `if ${useSudo ? 'sudo ' : ''}test -f ${certDir}/fullchain.pem && ${useSudo ? 'sudo ' : ''}test -f ${certDir}/privkey.pem; then printf '%s' ${shellSingleQuote(httpsNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; else printf '%s' ${shellSingleQuote(httpNginxConfig)} | ${useSudo ? 'sudo ' : ''}tee /etc/nginx/sites-available/qrscanner >/dev/null; fi`,
     `${useSudo ? 'sudo ' : ''}ln -sf /etc/nginx/sites-available/qrscanner /etc/nginx/sites-enabled/qrscanner`,
     `if command -v systemctl >/dev/null 2>&1; then ${useSudo ? 'sudo ' : ''}systemctl reload nginx || ${useSudo ? 'sudo ' : ''}systemctl restart nginx; else ${useSudo ? 'sudo ' : ''}service nginx reload || ${useSudo ? 'sudo ' : ''}service nginx restart; fi`,
