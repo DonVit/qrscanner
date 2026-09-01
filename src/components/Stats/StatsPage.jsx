@@ -3,7 +3,33 @@ import { useSelector } from "react-redux";
 import { Users, ReceiptText, CheckCircle2 } from "lucide-react";
 import { selectTotalScans, selectUniqueScans } from "../../selectors/receptsSelectors";
 
-const STATS_URL = "/api/stats";
+function resolveStatsUrl() {
+  const explicitStatsUrl = import.meta.env.VITE_STATS_URL;
+  if (explicitStatsUrl) {
+    return explicitStatsUrl;
+  }
+
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (!apiUrl) {
+    return "/api/stats";
+  }
+
+  if (/\/api\/receipts\/?$/i.test(apiUrl)) {
+    return apiUrl.replace(/\/api\/receipts\/?$/i, "/api/stats");
+  }
+
+  if (/\/receipts\/?$/i.test(apiUrl)) {
+    return apiUrl.replace(/\/receipts\/?$/i, "/stats");
+  }
+
+  if (/\/api\/?$/i.test(apiUrl)) {
+    return apiUrl.replace(/\/api\/?$/i, "/api/stats");
+  }
+
+  return `${apiUrl.replace(/\/+$/, "")}/stats`;
+}
+
+const STATS_URL = resolveStatsUrl();
 
 function StatCard({ title, value, icon: Icon, accent }) {
   return (
