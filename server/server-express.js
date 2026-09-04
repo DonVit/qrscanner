@@ -313,7 +313,17 @@ app.get('/api/stats', async (req, res) => {
 
 app.get('/api/public/urls', (req, res) => {
   const urls = readReceipts(null)
-    .map((receipt) => String(receipt.url || '').trim())
+    .map((receipt) => {
+      const url = String(receipt.url || '').trim();
+      if (!url) {
+        return null;
+      }
+
+      return {
+        id: receipt.id || url,
+        url,
+      };
+    })
     .filter(Boolean);
 
   res.json({ urls });
